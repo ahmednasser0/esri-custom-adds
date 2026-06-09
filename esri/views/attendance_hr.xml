@@ -1,0 +1,57 @@
+<odoo>
+    <data>
+        <record model="ir.ui.view" id="attendance_form">
+            <field name="name">Attendance Form</field>
+            <field name="model">hr.attendance</field>
+            <field name="inherit_id" ref="hr_attendance.hr_attendance_view_form"/>
+            <field name="arch" type="xml">
+
+                <!-- Day name before worked hours -->
+                <xpath expr="//field[@name='worked_hours']" position="before">
+                    <field name="day_name"/>
+                </xpath>
+
+                <!-- Sunset time after day name -->
+                <xpath expr="//field[@name='day_name']" position="after">
+                    <field name="sunset" widget="float_time"/>
+                </xpath>
+
+                <!-- Raw overtime hours after check-out -->
+                <xpath expr="//sheet//group//group//group//field[@name='check_out']" position="after">
+                    <field name="over_time_worked_hours" widget="float_time"/>
+                </xpath>
+
+                <!-- Raw overtime split: before and after sunset -->
+                <xpath expr="//field[@name='over_time_worked_hours']" position="after">
+                    <field name="overtime_hours_before_sunset" widget="float_time"/>
+                </xpath>
+                <xpath expr="//field[@name='overtime_hours_before_sunset']" position="after">
+                    <field name="overtime_hours_after_sunset" widget="float_time"/>
+                </xpath>
+
+                <!-- Weighted overtime before sunset -->
+                <xpath expr="//field[@name='overtime_hours_after_sunset']" position="after">
+                    <field name="weighted_overtime_before_sunset" widget="float_time"/>
+                </xpath>
+
+                <!-- Deduction hours after weighted_overtime_before_sunset -->
+                <xpath expr="//field[@name='weighted_overtime_before_sunset']" position="after">
+                    <field name="deduction_hours" widget="float_time" readonly="1"/>
+                </xpath>
+
+                <!-- weighted_overtime_after_sunset, total_overtime_hours, attendance_date after worked_hours -->
+                <xpath expr="//field[@name='worked_hours']" position="after">
+                    <field name="weighted_overtime_after_sunset"
+                           widget="float_time"
+                           string="Weighted Overtime After Sunset (x 1.70)"
+                           readonly="1"/>
+                    <field name="total_overtime_hours"
+                           widget="float_time"
+                           string="Total Weighted Overtime"
+                           readonly="1"/>
+                </xpath>
+
+            </field>
+        </record>
+    </data>
+</odoo>
