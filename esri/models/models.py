@@ -10,6 +10,10 @@ RATE_BEFORE_SUNSET   = 1.35   # overtime multiplier before sunset
 RATE_AFTER_SUNSET    = 1.70   # overtime multiplier after sunset
 
 LATE_CHECKIN_LIMIT   = 11.0   # deduct if check-in is after  11:00 AM (local)
+LATE_GRACE_MINUTES   = 15     # first late occurrence ≤ this many minutes -> free once/month
+LATE_HALF_DAY_LIMIT  = 60     # up to 60 min late -> half-day deduction
+QUARTER_DAY_HOURS    = 2.0    # hours deducted for second ≤15-min late in same month
+HALF_DAY_HOURS       = 4.0    # hours deducted for 16-60 min late
 EARLY_CHECKOUT_LIMIT = 15.0   # deduct if check-out is before 03:00 PM (local)
 SHIFT_START          = 7.0    # ignore any check-in before 07:00 AM (local)
 SHIFT_END            = 19.0   # ignore attendance if check-in is after 07:00 PM (local)
@@ -120,6 +124,31 @@ class HrAttendance(models.Model):
         """
         checkin_local = self._to_local_hour(rec.check_in)
         return max(checkin_local, SHIFT_START)
+
+    def _grace_used_this_month(self, rec):
+        """
+        Return the number of times this employee was late by ≤15 min
+        on days BEFORE rec.attendance_date in the same calendar month.
+        Used to decide whether the free-once-a-month grace applies.
+        """
+        if not rec.employee_id or not rec.attendance_date:
+            return 0
+        month_start = rec.attendance_date.replace(day=1)
+        earlier = self.env['hr.attendance'].search([
+            ('employee_id',     '=', rec.employee_id.id),
+            ('attendance_date', '>=', month_start),
+            ('attendance_date', '<',  rec.attendance_date),
+            ('id',              '!=', rec.id),
+        ])
+        count = 0
+        for att in earlier:
+            if att.check_in:
+                ci_local = self._to_local_hour(att.check_in)
+                ci_eff   = max(ci_local, SHIFT_START)
+                lm = (ci_eff - LATE_CHECKIN_LIMIT) * 60 if ci_eff > LATE_CHECKIN_LIMIT else 0.0
+                if 0 < lm <= LATE_GRACE_MINUTES:
+                    count += 1
+        return count
 
     # ─── Compute Methods ─────────────────────────────────────────────────────
 
@@ -307,14 +336,34 @@ class HrAttendance(models.Model):
             checkin_local  = self._effective_checkin_hour(rec)
             checkout_local = self._to_local_hour(rec.check_out)
 
-            # Rule 1 — late arrival (strictly after 11:00 AM)
-            late_arrival = checkin_local - LATE_CHECKIN_LIMIT if checkin_local > LATE_CHECKIN_LIMIT else 0.0
+            # Rule 1 — late arrival (tiered, grace once per month)
+            # 0 < late ≤ 15 min, first time this month  → no deduction
+            # 0 < late ≤ 15 min, second+ time this month → quarter day (2 h)
+            # 16–60 min late                             → half day (4 h)
+            # > 60 min late                              → full day (8 h)
+            late_minutes = (checkin_local - LATE_CHECKIN_LIMIT) * 60 if checkin_local > LATE_CHECKIN_LIMIT else 0.0
+            grace_free = False
+            if late_minutes <= 0:
+                late_arrival = 0.0
+            elif late_minutes <= LATE_GRACE_MINUTES:
+                if self._grace_used_this_month(rec) == 0:
+                    late_arrival = 0.0
+                    grace_free   = True   # first time: no penalty, adjust short_shift too
+                else:
+                    late_arrival = QUARTER_DAY_HOURS
+            elif late_minutes <= LATE_HALF_DAY_LIMIT:
+                late_arrival = HALF_DAY_HOURS
+            else:
+                late_arrival = STANDARD_HOURS
 
             # Rule 2 — early departure (strictly before 03:00 PM)
             early_departure = EARLY_CHECKOUT_LIMIT - checkout_local if checkout_local < EARLY_CHECKOUT_LIMIT else 0.0
 
             # Rule 3 — short shift (less than 8 hours worked)
-            short_shift = max(STANDARD_HOURS - rec.worked_hours, 0.0)
+            # When grace is free, add back the late minutes so they don't
+            # cause a phantom short-shift deduction.
+            adjusted_worked = rec.worked_hours + (late_minutes / 60.0 if grace_free else 0.0)
+            short_shift = max(STANDARD_HOURS - adjusted_worked, 0.0)
 
             rec.deduction_hours = max(late_arrival + early_departure, short_shift)
 
