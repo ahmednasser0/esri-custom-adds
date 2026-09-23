@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_picking_form_interim_entries" model="ir.ui.view">
+        <field name="name">stock.picking.form.inherit.stock.interim.split</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Accounting Entries" name="interim_entries"
+                      invisible="not interim_move_line_count"
+                      groups="account.group_account_readonly">
+                    <field name="interim_move_line_count" invisible="1"/>
+                    <field name="interim_move_line_ids" readonly="1" nolabel="1">
+                        <list create="0" delete="0" edit="0"
+                              decoration-muted="reconciled">
+                            <field name="date"/>
+                            <field name="move_id" string="Entry"/>
+                            <field name="journal_id" optional="show"/>
+                            <field name="account_id"/>
+                            <field name="product_id" optional="show"/>
+                            <field name="name" optional="hide"/>
+                            <field name="partner_id" optional="hide"/>
+                            <field name="debit" sum="Total Debit"/>
+                            <field name="credit" sum="Total Credit"/>
+                            <field name="amount_residual" string="Open Balance" optional="show"/>
+                            <field name="matching_number" string="Matching"/>
+                            <field name="reconciled" optional="hide"/>
+                            <field name="company_currency_id" column_invisible="1"/>
+                        </list>
+                    </field>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

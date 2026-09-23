@@ -1,9 +1,12 @@
-from odoo import Command, fields, models
+from odoo import Command, api, fields, models
 from odoo.tools import float_is_zero
 
 
 class StockMove(models.Model):
     _inherit = 'stock.move'
+
+    interim_revaluation_move_ids = fields.One2many(
+        'account.move', 'interim_stock_move_id', string="Interim Revaluation Entries")
 
     def _get_interim_account(self):
         """Return the interim account used as counterpart of the stock
@@ -95,6 +98,7 @@ class StockMove(models.Model):
             label = self.env._("%(ref)s - %(product)s (revaluation)",
                                ref=move.reference, product=move.product_id.name)
             self.env['account.move'].sudo().create({
+                'interim_stock_move_id': move.id,
                 'ref': label,
                 'partner_id': move._get_partner_id_for_valuation_lines(),
                 'journal_id': move.company_id.account_stock_journal_id.id,
@@ -105,4 +109,79 @@ class StockMove(models.Model):
                     for vals in move._prepare_interim_aml_vals(debit_acc, credit_acc, abs(delta), label)
                 ],
             })._post()
+        posted_moves._reconcile_interim_lines()
         return res
+
+    def _create_account_move(self):
+        account_move = super()._create_account_move()
+        self._reconcile_interim_lines()
+        return account_move
+
+    # -------------------------------------------------------------------------
+    # Interim reconciliation
+    # -------------------------------------------------------------------------
+
+    def _get_interim_order_line(self):
+        """The purchase/sale order line that ties this move to its invoices."""
+        self.ensure_one()
+        return self.purchase_line_id or self.sale_line_id
+
+    def _get_interim_accounts(self, order_line):
+        """Interim account of the order line's company and its fiscal
+        position mappings found on the related invoices."""
+        company = order_line.company_id
+        if order_line._name == 'purchase.order.line':
+            account = company.purchase_interim_account_id
+        else:
+            account = company.sale_interim_account_id
+        if not account:
+            return self.env['account.account']
+        accounts = account
+        for invoice in order_line.invoice_lines.move_id:
+            accounts |= invoice.fiscal_position_id.map_account(account)
+        return accounts
+
+    @api.model
+    def _get_interim_lines_for_order_line(self, order_line):
+        """All posted journal items on the interim account(s) linked to an
+        order line: stock entries (receipts/deliveries, returns, revaluations)
+        and invoice side (vendor bill lines / customer invoice COGS lines)."""
+        accounts = self._get_interim_accounts(order_line)
+        if not accounts:
+            return self.env['account.move.line']
+        stock_moves = order_line.move_ids
+        entries = stock_moves.account_move_id | stock_moves.interim_revaluation_move_ids
+        lines = entries.line_ids
+        invoice_lines = order_line.invoice_lines
+        if order_line._name == 'purchase.order.line':
+            # Bill product lines + price difference lines (standard cost)
+            lines |= invoice_lines
+            lines |= invoice_lines.move_id.line_ids.filtered(
+                lambda l: l.display_type == 'cogs' and l.product_id == order_line.product_id)
+        else:
+            lines |= invoice_lines.move_id.line_ids.filtered(
+                lambda l: l.display_type == 'cogs' and l.cogs_origin_id in invoice_lines)
+        return lines.filtered(
+            lambda l: l.parent_state == 'posted'
+            and l.account_id in accounts
+            and l.product_id == order_line.product_id)
+
+    def _reconcile_interim_lines(self):
+        """Close the interim account: match the stock entry lines with the
+        invoice lines of the same order line (Receipt <-> Vendor Bill,
+        Delivery <-> Customer Invoice COGS). Partial matches are kept open
+        until the remaining quantities are invoiced/received."""
+        order_lines = set()
+        for move in self:
+            order_line = move._get_interim_order_line()
+            if order_line:
+                order_lines.add(order_line)
+        for order_line in order_lines:
+            lines = self._get_interim_lines_for_order_line(order_line).filtered(
+                lambda l: l.account_id.reconcile and not l.reconciled)
+            for account in lines.account_id:
+                account_lines = lines.filtered(lambda l: l.account_id == account)
+                has_debit = any(l.amount_residual > 0 for l in account_lines)
+                has_credit = any(l.amount_residual < 0 for l in account_lines)
+                if has_debit and has_credit:
+                    account_lines.sudo().reconcile()

@@ -22,13 +22,14 @@ Returns post the reverse entries on the same interim accounts.
     'website': "",
 
     'category': 'Inventory/Inventory',
-    'version': '19.0.1.0.1',
+    'version': '19.0.1.1.0',
     'license': 'LGPL-3',
 
     'depends': ['stock_account', 'purchase_stock', 'sale_stock'],
 
     'data': [
         'views/res_config_settings_views.xml',
+        'views/stock_picking_views.xml',
     ],
     'installable': True,
 }

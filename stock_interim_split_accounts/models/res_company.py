@@ -29,6 +29,23 @@ class ResCompany(models.Model):
              "customer invoices (Goods Delivered Not Invoiced).",
     )
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        companies = super().create(vals_list)
+        companies._enable_interim_reconciliation()
+        return companies
+
+    def write(self, vals):
+        res = super().write(vals)
+        if {'purchase_interim_account_id', 'sale_interim_account_id'} & vals.keys():
+            self._enable_interim_reconciliation()
+        return res
+
+    def _enable_interim_reconciliation(self):
+        """Interim accounts are closed by reconciliation, so they must allow it."""
+        accounts = self.purchase_interim_account_id | self.sale_interim_account_id
+        accounts.filtered(lambda a: not a.reconcile).sudo().write({'reconcile': True})
+
     @api.constrains('purchase_interim_account_id', 'sale_interim_account_id', 'account_stock_valuation_id')
     def _check_interim_accounts(self):
         for company in self:
