@@ -22,7 +22,7 @@ Returns post the reverse entries on the same interim accounts.
     'website': "",
 
     'category': 'Inventory/Inventory',
-    'version': '19.0.1.0.0',
+    'version': '19.0.1.0.1',
     'license': 'LGPL-3',
 
     'depends': ['stock_account', 'purchase_stock', 'sale_stock'],
