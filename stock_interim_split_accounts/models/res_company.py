@@ -9,26 +9,27 @@ class ResCompany(models.Model):
         'account.account',
         string="Purchase Interim Account",
         check_company=True,
-        domain="[('deprecated', '=', False)]",
-        help="Credited on purchase receipts and debited on vendor bills "
-             "(Goods Received Not Invoiced). Overrides the Stock Input Account "
-             "of product categories.",
+        help="Credited on vendor receipts and debited on vendor bills "
+             "(Goods Received Not Invoiced).",
     )
     sale_interim_account_id = fields.Many2one(
         'account.account',
         string="Sales Interim Account",
         check_company=True,
-        domain="[('deprecated', '=', False)]",
-        help="Debited on customer deliveries and credited on customer invoices "
-             "against COGS (Goods Delivered Not Invoiced). Overrides the Stock "
-             "Output Account of product categories.",
+        help="Debited on customer deliveries and credited against COGS on "
+             "customer invoices (Goods Delivered Not Invoiced).",
     )
 
-    @api.constrains('purchase_interim_account_id', 'sale_interim_account_id')
-    def _check_interim_accounts_differ(self):
+    @api.constrains('purchase_interim_account_id', 'sale_interim_account_id', 'account_stock_valuation_id')
+    def _check_interim_accounts(self):
         for company in self:
-            if (company.purchase_interim_account_id
-                    and company.purchase_interim_account_id == company.sale_interim_account_id):
+            purchase = company.purchase_interim_account_id
+            sale = company.sale_interim_account_id
+            if purchase and purchase == sale:
                 raise ValidationError(_(
                     "The Purchase Interim Account and the Sales Interim Account "
                     "must be different."))
+            if company.account_stock_valuation_id and company.account_stock_valuation_id in (purchase | sale):
+                raise ValidationError(_(
+                    "The interim accounts must be different from the Stock "
+                    "Valuation Account."))
