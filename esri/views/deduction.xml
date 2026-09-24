@@ -1,0 +1,119 @@
+<odoo>
+    <data>
+
+        <!-- ─── Form View ─────────────────────────────────────────────────── -->
+        <record model="ir.ui.view" id="deduction_form_view">
+            <field name="name">deduction.form</field>
+            <field name="model">deduction</field>
+            <field name="arch" type="xml">
+                <form string="Deduction" create="false" delete="false">
+                    <header>
+                        <button name="action_post" string="Post" type="object"
+                                class="oe_highlight" invisible="state != 'draft'"/>
+                        <button name="action_warning" string="Warning" type="object"
+                                invisible="state not in ('draft', 'posted')"/>
+                        <button name="action_set_to_draft" string="Reset to Draft" type="object"
+                                invisible="state not in ('warning', 'archived')"/>
+                        <button name="action_archive_record" string="Archive" type="object"
+                                invisible="state == 'archived'"/>
+                        <field name="state" widget="statusbar" statusbar_visible="draft,posted,warning,archived"/>
+                    </header>
+                    <sheet>
+                        <group>
+                            <field name="employee_id"    readonly="1"/>
+                            <field name="date"           readonly="1"/>
+                            <field name="employee_rule"  readonly="1"/>
+                            <field name="core_check"     widget="float_time" readonly="1"/>
+                            <field name="daily_check"    widget="float_time" readonly="1"/>
+                            <field name="deduction"      widget="float_time" readonly="1"/>
+                            <field name="deducted_days"  widget="float_time"/>
+                            <field name="work_entry"/>
+                        </group>
+                    </sheet>
+                    <chatter/>
+                </form>
+            </field>
+        </record>
+
+        <!-- ─── List View ─────────────────────────────────────────────────── -->
+        <record model="ir.ui.view" id="deduction_list_view">
+            <field name="name">deduction.list</field>
+            <field name="model">deduction</field>
+            <field name="arch" type="xml">
+                <list string="Deductions" create="false" edit="false">
+                    <header>
+                        <button name="action_run_post_deduction" string="Run Post Deduction" type="object"/>
+                        <button name="action_run_work_entry" string="Run Work Entry" type="object"/>
+                    </header>
+                    <field name="employee_id"/>
+                    <field name="date"/>
+                    <field name="core_check"  widget="float_time"/>
+                    <field name="daily_check" widget="float_time"/>
+                    <field name="deduction"   widget="float_time"/>
+                    <field name="state" widget="badge"
+                           decoration-success="state == 'posted'"
+                           decoration-warning="state == 'warning'"
+                           decoration-muted="state == 'archived'"/>
+                </list>
+            </field>
+        </record>
+
+        <!-- ─── Search View ───────────────────────────────────────────────── -->
+        <record model="ir.ui.view" id="deduction_search_view">
+            <field name="name">deduction.search</field>
+            <field name="model">deduction</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="employee_id"/>
+                    <field name="date"/>
+                    <filter name="filter_draft" string="Draft" domain="[('state', '=', 'draft')]"/>
+                    <filter name="filter_posted" string="Posted" domain="[('state', '=', 'posted')]"/>
+                    <filter name="filter_warning" string="Warning" domain="[('state', '=', 'warning')]"/>
+                    <filter name="filter_archived" string="Archived" domain="[('state', '=', 'archived')]"/>
+                    <filter name="group_by_employee" string="Employee" context="{'group_by': 'employee_id'}"/>
+                    <filter name="group_by_date" string="Date" context="{'group_by': 'date'}"/>
+                    <filter name="group_by_state" string="Status" context="{'group_by': 'state'}"/>
+                </search>
+            </field>
+        </record>
+
+        <!-- ─── Action ────────────────────────────────────────────────────── -->
+        <record id="deduction_action" model="ir.actions.act_window">
+            <field name="name">Deduction</field>
+            <field name="res_model">deduction</field>
+            <field name="view_mode">list,form</field>
+            <field name="search_view_id" ref="deduction_search_view"/>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    No Deductions Created
+                </p>
+            </field>
+        </record>
+
+        <!-- ─── Menu Items ─────────────────────────────────────────────────── -->
+        <menuitem
+            name="Advanced Allocation"
+            id="attendance_deduction"
+            parent="hr_attendance.menu_hr_attendance_root"
+            sequence="10"/>
+
+        <menuitem
+            name="Deduction"
+            id="deduction_menu"
+            parent="attendance_deduction"
+            action="deduction_action"
+            sequence="10"/>
+
+        <!-- ─── Cron: create daily deduction records ──────────────────────── -->
+        <record id="ir_cron_daily_deduction" model="ir.cron">
+            <field name="name">Daily Deduction Records</field>
+            <field name="model_id" ref="esri.model_deduction"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_create_daily_deductions()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="active">True</field>
+        </record>
+
+    </data>
+</odoo>

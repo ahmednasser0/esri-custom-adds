@@ -1,0 +1,50 @@
+<odoo>
+    <data>
+
+        <!-- Form View -->
+        <record model="ir.ui.view" id="esri_config_form_view">
+            <field name="name">esri.config.form</field>
+            <field name="model">esri.config</field>
+            <field name="arch" type="xml">
+                <form string="Esri HR Configurations" create="0" delete="0">
+                    <sheet>
+                        <group string="Weekday Overtime">
+                            <field name="overtime_cutoff" widget="float_time"/>
+                            <field name="max_worked_hours" widget="float_time"/>
+                            <field name="overtime_rate_before_sunset"/>
+                            <field name="overtime_rate_after_sunset"/>
+                        </group>
+                        <group string="Weekend Overtime">
+                            <field name="saturday_first_rate"/>
+                            <field name="saturday_second_rate"/>
+                            <field name="friday_rate"/>
+                        </group>
+                        <group string="Deduction Rates">
+                            <field name="company_day_hours" widget="float_time"/>
+                            <field name="deduction_quarter_rate"/>
+                            <field name="deduction_half_rate"/>
+                            <field name="deduction_full_rate"/>
+                            <field name="absence_deduction_rate"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <!-- Server Action: always open the singleton record -->
+        <record model="ir.actions.server" id="esri_config_server_action">
+            <field name="name">Esri HR Configurations</field>
+            <field name="model_id" ref="model_esri_config"/>
+            <field name="state">code</field>
+            <field name="code">config = env['esri.config'].get_config(); action = config.get_formview_action(); action.update({'target': 'current'})</field>
+        </record>
+
+        <menuitem
+            id="esri_config_menu"
+            name="Esri Configurations"
+            parent="hr_attendance.menu_hr_attendance_configuration"
+            action="esri_config_server_action"
+            sequence="100"/>
+
+    </data>
+</odoo>

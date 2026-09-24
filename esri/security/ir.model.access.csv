@@ -1,0 +1,6 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_deduction,deduction,model_deduction,base.group_user,1,1,1,1
+access_hr_overtime,hr.overtime,model_hr_overtime,base.group_user,1,1,1,1
+access_daily_report,daily.report,model_daily_report,base.group_user,1,1,1,1
+access_esri_config,esri.config,model_esri_config,base.group_user,1,0,0,0
+access_esri_config_manager,esri.config.manager,model_esri_config,base.group_system,1,1,1,1

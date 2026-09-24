@@ -1,0 +1,48 @@
+<odoo>
+    <data>
+        <record model="ir.ui.view" id="attendance_form">
+            <field name="name">Attendance Form</field>
+            <field name="model">hr.attendance</field>
+            <field name="inherit_id" ref="hr_attendance.hr_attendance_view_form"/>
+            <field name="arch" type="xml">
+
+                <!-- Day name before worked hours -->
+                <xpath expr="//field[@name='worked_hours']" position="before">
+                    <field name="day_name"/>
+                </xpath>
+
+                <!-- Raw overtime hours after check-out -->
+                <xpath expr="//sheet//group//group//group//field[@name='check_out']" position="after">
+                    <field name="over_time_worked_hours" widget="float_time"/>
+                    <field name="missing_punch"/>
+                </xpath>
+
+            </field>
+        </record>
+        <!-- ─── Working Schedules: add check-in/out limits ──────────────── -->
+        <record model="ir.ui.view" id="resource_calendar_form_esri">
+            <field name="name">resource.calendar.form.esri</field>
+            <field name="model">resource.calendar</field>
+            <field name="inherit_id" ref="resource.resource_calendar_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='tz']" position="after">
+                    <field name="daily_work_hours"      widget="float_time"/>
+                    <field name="sunset"                widget="float_time"/>
+                    <field name="first_check_in"        widget="float_time"/>
+                    <field name="last_check_out"        widget="float_time"/>
+                    <field name="late_check_in_limit"   widget="float_time"/>
+                    <field name="early_check_out_limit" widget="float_time"/>
+                </xpath>
+
+                <xpath expr="//field[@name='schedule_type']" position="after">
+                    <field name="week_start_day"/>
+                    <field name="week_end_day"/>
+                    <field name="weekend_first_day"/>
+                    <field name="weekend_second_day"/>
+                    <field name="number_of_days" string="Number Of Week Days"/>
+                </xpath>
+            </field>
+        </record>
+
+    </data>
+</odoo>

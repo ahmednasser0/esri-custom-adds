@@ -1,0 +1,17 @@
+<odoo>
+    <data>
+        <record model="ir.ui.view" id="employee_form_inherit_rule">
+            <field name="name">hr.employee.form.inherit.rule</field>
+            <field name="model">hr.employee</field>
+            <field name="inherit_id" ref="hr.view_employee_form"/>
+            <field name="arch" type="xml">
+
+                <!-- Employee Rule before department_id -->
+                <xpath expr="//field[@name='department_id']" position="before">
+                    <field name="employee_rule"/>
+                </xpath>
+
+            </field>
+        </record>
+    </data>
+</odoo>
