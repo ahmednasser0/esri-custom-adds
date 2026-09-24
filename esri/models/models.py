@@ -185,10 +185,13 @@ class HrAttendance(models.Model):
         if the actual check-out is later — the checkout used for the
         calculation is capped at SHIFT_END.
         Weekend days (Friday / Saturday) are handled entirely in _compute_total_overtime.
+        Public holidays follow the weekend-first rules there too, so they are
+        excluded here as well.
         Part-time employees never get overtime — their extra hours are capped at 8.
         """
         cfg            = self.env['esri.config'].get_config()
         ot_cutoff      = cfg.overtime_cutoff or 19.0
+        Overtime       = self.env['hr.overtime']
 
         for rec in self:
             is_part_time = rec.employee_id and \
@@ -199,7 +202,11 @@ class HrAttendance(models.Model):
             hours_per_day = cal.daily_work_hours if cal and cal.daily_work_hours else STANDARD_HOURS
             last_co       = cal.last_check_out   if cal and cal.last_check_out   else 19.0
 
-            if not is_part_time and rec.check_in and rec.check_out \
+            # Public holidays are handled by the weekend-first rules in
+            # hr.overtime, so no raw weekday overtime is accrued on them.
+            is_holiday = bool(rec.check_out) and Overtime._is_public_holiday(rec.check_out.date())
+
+            if not is_part_time and rec.check_in and rec.check_out and not is_holiday \
                     and classify_day(cal, rec.day_name) == 'weekday' and checkin_local <= last_co:
                 checkin_effective  = self._effective_checkin_hour(rec)
                 checkout_local     = self._to_local_hour(rec.check_out)

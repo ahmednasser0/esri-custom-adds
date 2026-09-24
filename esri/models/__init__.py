@@ -6,3 +6,4 @@ from . import Employee_HR
 from . import overtime
 from . import daily_report
 from . import hr_leave_sync
+from . import public_holiday_sync
