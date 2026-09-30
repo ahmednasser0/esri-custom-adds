@@ -264,16 +264,34 @@ class Overtime(models.Model):
         return (leave.number_of_hours or 0.0) / max(total_days, 1)
 
     @api.model
+    def _worked_time_leave_domain(self, employee, target_date):
+        """
+        Domain for the approved leaves on target_date that count as WORKED
+        time. A Time Off Type whose "Kind of Time Off" is Worked Time
+        (time_type == 'other') is treated like a normal working day; one set to
+        Absence (time_type == 'leave') is not counted at all, which leaves the
+        employee absent for that day and lets the usual absence deduction apply.
+        """
+        return [
+            ('employee_id',                 '=',  employee.id),
+            ('request_date_from',           '<=', target_date),
+            ('request_date_to',             '>=', target_date),
+            ('state',                       '=',  'validate'),
+            ('holiday_status_id.time_type', '=',  'other'),
+        ]
+
+    @api.model
+    def _get_worked_time_leaves(self, employee, target_date):
+        """Approved leaves on target_date that count as worked time."""
+        return self.env['hr.leave'].sudo().search(
+            self._worked_time_leave_domain(employee, target_date)
+        )
+
+    @api.model
     def _get_approved_time_off_for(self, employee, target_date):
         """Approved time-off hours covering target_date for the employee."""
-        leaves = self.env['hr.leave'].sudo().search([
-            ('employee_id',       '=', employee.id),
-            ('request_date_from', '<=', target_date),
-            ('request_date_to',   '>=', target_date),
-            ('state',             '=',  'validate'),
-        ])
         time_off = 0.0
-        for leave in leaves:
+        for leave in self._get_worked_time_leaves(employee, target_date):
             time_off += self._leave_day_hours(leave)
         return time_off
 
@@ -319,12 +337,7 @@ class Overtime(models.Model):
             worked += max(checkout_local - checkin_effective, 0.0)
             last_out = max(last_out, checkout_local)
 
-        leaves = self.env['hr.leave'].sudo().search([
-            ('employee_id',       '=', employee.id),
-            ('request_date_from', '<=', target_date),
-            ('request_date_to',   '>=', target_date),
-            ('state',             '=',  'validate'),
-        ])
+        leaves = self._get_worked_time_leaves(employee, target_date)
         time_off = 0.0
         for leave in leaves:
             time_off += self._leave_day_hours(leave)
@@ -390,12 +403,9 @@ class Overtime(models.Model):
                     segments.append((start, end))
 
             # ── Approved time-off intervals ─────────────────────────────────
-            leaves = Leave.search([
-                ('employee_id',       '=', rec.employee_id.id),
-                ('request_date_from', '<=', rec.date),
-                ('request_date_to',   '>=', rec.date),
-                ('state',             '=',  'validate'),
-            ])
+            leaves = Leave.search(
+                self._worked_time_leave_domain(rec.employee_id, rec.date)
+            )
             for leave in leaves:
                 hour_from = getattr(leave, 'request_hour_from', False)
                 hour_to   = getattr(leave, 'request_hour_to',   False)
@@ -463,12 +473,9 @@ class Overtime(models.Model):
                     last_out = max(last_out, out_local)
 
             # End ('to') of hour-based approved leaves
-            leaves = Leave.search([
-                ('employee_id',       '=', rec.employee_id.id),
-                ('request_date_from', '<=', rec.date),
-                ('request_date_to',   '>=', rec.date),
-                ('state',             '=',  'validate'),
-            ])
+            leaves = Leave.search(
+                self._worked_time_leave_domain(rec.employee_id, rec.date)
+            )
             for leave in leaves:
                 if getattr(leave, 'request_unit_hours', False):
                     hour_to = getattr(leave, 'request_hour_to', False)

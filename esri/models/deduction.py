@@ -95,13 +95,10 @@ class Deduction(models.Model):
                 intervals.append((start, end))
 
         dayleave_hours = 0.0
-        leaves = self.env['hr.leave'].sudo().search([
-            ('employee_id',       '=', employee.id),
-            ('request_date_from', '<=', target_date),
-            ('request_date_to',   '>=', target_date),
-            ('state',             '=',  'validate'),
-        ])
         Overtime = self.env['hr.overtime']
+        # Only Worked Time types cover the core window. An Absence type leaves
+        # the window uncovered, so the employee counts as absent that day.
+        leaves = Overtime._get_worked_time_leaves(employee, target_date)
         for leave in leaves:
             start = end = 0.0
             if getattr(leave, 'request_unit_hours', False):

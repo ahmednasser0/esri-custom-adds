@@ -53,12 +53,8 @@ class DailyReport(models.Model):
         ])
 
     def _get_leaves(self, rec):
-        return self.env['hr.leave'].sudo().search([
-            ('employee_id',       '=', rec.employee_id.id),
-            ('request_date_from', '<=', rec.date),
-            ('request_date_to',   '>=', rec.date),
-            ('state',             '=',  'validate'),
-        ])
+        # Only Time Off types set to Worked Time count towards worked hours.
+        return self.env['hr.overtime']._get_worked_time_leaves(rec.employee_id, rec.date)
 
     @api.model
     def _leave_day_hours(self, leave):

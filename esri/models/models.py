@@ -251,12 +251,10 @@ class HrAttendance(models.Model):
 
     def _get_approved_leave_hours(self, rec):
         """Approved time-off hours covering rec.attendance_date."""
-        leaves = self.env['hr.leave'].sudo().search([
-            ('employee_id',       '=', rec.employee_id.id),
-            ('request_date_from', '<=', rec.attendance_date),
-            ('request_date_to',   '>=', rec.attendance_date),
-            ('state',             '=',  'validate'),
-        ])
+        # Only Time Off types set to Worked Time count towards worked hours.
+        leaves = self.env['hr.overtime']._get_worked_time_leaves(
+            rec.employee_id, rec.attendance_date
+        )
         hours = 0.0
         for leave in leaves:
             hours += self._leave_day_hours(leave)
