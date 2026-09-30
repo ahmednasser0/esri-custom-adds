@@ -616,7 +616,15 @@ class Overtime(models.Model):
         overtime = self._compute_overtime_hours_for_employee(emp, target_date)
 
         if existing:
-            existing.write({'overtime_hours': overtime})
+            vals = {'overtime_hours': overtime}
+            # A changed value sends the record back to Draft, so a reviewer
+            # sees that what was posted no longer matches the attendance.
+            # Only an actual change resets it — the daily cron and the public
+            # holiday resync re-run _ensure_record over records that did not
+            # change, and those must keep their status.
+            if abs((existing.overtime_hours or 0.0) - overtime) > HOUR_EPS:
+                vals['state'] = 'draft'
+            existing.write(vals)
         else:
             existing = OT.create({
                 'employee_id':    employee_id,
