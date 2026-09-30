@@ -49,7 +49,7 @@
                     <field name="date"/>
                     <field name="core_check"  widget="float_time"/>
                     <field name="daily_check" widget="float_time"/>
-                    <field name="deduction"   widget="float_time"/>
+                    <field name="deduction"   widget="float_time" sum="Total Deduction"/>
                     <field name="state" widget="badge"
                            decoration-success="state == 'posted'"
                            decoration-warning="state == 'warning'"
@@ -70,6 +70,9 @@
                     <filter name="filter_posted" string="Posted" domain="[('state', '=', 'posted')]"/>
                     <filter name="filter_warning" string="Warning" domain="[('state', '=', 'warning')]"/>
                     <filter name="filter_archived" string="Archived" domain="[('state', '=', 'archived')]"/>
+                    <separator/>
+                    <filter name="filter_has_deduction" string="Has Deduction" domain="[('deduction', '>', 0)]"/>
+                    <filter name="filter_no_deduction" string="No Deduction" domain="[('deduction', '=', 0)]"/>
                     <filter name="group_by_employee" string="Employee" context="{'group_by': 'employee_id'}"/>
                     <filter name="group_by_date" string="Date" context="{'group_by': 'date'}"/>
                     <filter name="group_by_state" string="Status" context="{'group_by': 'state'}"/>

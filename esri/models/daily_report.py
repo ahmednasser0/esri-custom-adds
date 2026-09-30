@@ -13,29 +13,40 @@ class DailyReport(models.Model):
     employee_id = fields.Many2one('hr.employee', string='Employee', required=True, ondelete='cascade')
     date        = fields.Date(string='Date', required=True)
 
+    # Computed AND stored. The values come from hr.attendance and hr.leave via
+    # manual search() calls, which Odoo's dependency graph cannot see, so
+    # _compute_daily_values only fires when employee_id / date change — and
+    # those never change on an existing record. _ensure_record recomputes them
+    # explicitly instead, and it runs on every path that can affect the result.
+    # Storing them makes the values searchable, groupable and cheap to read.
     last_check_out = fields.Float(
         string='Last Check Out',
         compute='_compute_daily_values',
+        store=True,
         help="الأكبر بين آخر انصراف فعلى فى اليوم ونهاية الـ time off المعتمد (وقت 'إلى').",
     )
     effective_check_out = fields.Float(
         string='Effective Check-Out',
         compute='_compute_daily_values',
+        store=True,
         help="Last Check Out بحد أقصى الـ Overtime Cutoff من الإعدادات.",
     )
     minus_minutes = fields.Float(
         string='Minus Minutes',
         compute='_compute_daily_values',
+        store=True,
         help="الفرق بين Last Check Out والـ Overtime Cutoff لو الانصراف بعده، وإلا صفر.",
     )
     total_worked_hours = fields.Float(
         string='Total Worked Hours',
         compute='_compute_daily_values',
+        store=True,
         help="ساعات العمل الفعلية + الإجازات المعتمدة فى اليوم.",
     )
     actual_worked_hours = fields.Float(
         string='Actual Worked Hours',
         compute='_compute_daily_values',
+        store=True,
         help="(Total Worked Hours - Minus Minutes) بحد أقصى Max Worked Hours من الإعدادات.",
     )
 
@@ -164,16 +175,25 @@ class DailyReport(models.Model):
 
     @api.model
     def _ensure_record(self, employee_id, target_date):
-        """Create the (employee, date) record if it does not exist yet."""
+        """
+        Create the (employee, date) record if it does not exist yet, and refresh
+        its stored values otherwise.
+        """
         existing = self.sudo().search([
             ('employee_id', '=', employee_id),
             ('date',        '=', target_date),
         ], limit=1)
+
         if not existing:
-            existing = self.sudo().create({
+            # create() computes the stored fields on its own.
+            return self.sudo().create({
                 'employee_id': employee_id,
                 'date':        target_date,
             })
+
+        # Calling the compute directly is what refreshes a stored computed field
+        # whose real sources (attendance, leaves) are outside its @api.depends.
+        existing._compute_daily_values()
         return existing
 
     @api.model

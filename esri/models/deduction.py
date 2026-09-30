@@ -44,31 +44,33 @@ class Deduction(models.Model):
         required=True,
     )
 
+    # These three are computed AND stored. They are sourced from hr.attendance
+    # and hr.leave through manual search() calls, which Odoo's dependency graph
+    # cannot see, so _compute_checks only fires when employee_id / date change —
+    # and those never change on an existing record. _ensure_record therefore
+    # recomputes them explicitly, and it is called from every path that can
+    # affect the result (attendance sync, leave approval, public holidays, cron).
+    # Storing them makes the values searchable, groupable and cheap to read.
     core_check = fields.Float(
         string='Core Check',
         compute='_compute_checks',
+        store=True,
         help="الوقت الغير مغطى (لا حضور ولا إجازة معتمدة) داخل الفترة الأساسية "
              "من Late Check-in Limit إلى Early Check-out Limit.",
     )
     daily_check = fields.Float(
         string='Daily Check',
         compute='_compute_checks',
+        store=True,
         help="الفرق بين ساعات اليوم الكامل والـ Actual Worked Hours (صفر لو الموظف كمل يومه).",
     )
     deduction = fields.Float(
         string='Deduction',
         compute='_compute_checks',
+        store=True,
         help="الخصم: الأكبر بين Core Check و Daily Check مطبق عليه شرائح "
              "ربع/نص/يوم كامل، والغياب الكامل = يوم وربع. "
              "أيام العطلات الرسمية بدون خصم.",
-    )
-    last_synced_deduction = fields.Float(
-        string='Last Synced Deduction',
-        readonly=True,
-        copy=False,
-        help="قيمة الخصم وقت آخر مزامنة. Core Check و Daily Check و Deduction "
-             "حقول computed غير مخزّنة، فالحقل ده هو المرجع اللى بنعرف بيه إن "
-             "القيمة اتغيرت عشان السجل يرجع Draft. مش محتاج يظهر فى الواجهة.",
     )
 
     # ─── Helpers ─────────────────────────────────────────────────────────────
@@ -235,9 +237,8 @@ class Deduction(models.Model):
     @api.model
     def _ensure_record(self, employee_id, target_date):
         """
-        Create the (employee, date) record if it does not exist yet, and send an
-        existing one back to Draft when its deduction no longer matches what was
-        last synced.
+        Create the (employee, date) record if it does not exist yet, refresh its
+        stored checks, and send it back to Draft when the deduction changed.
         """
         existing = self.sudo().search([
             ('employee_id', '=', employee_id),
@@ -245,25 +246,25 @@ class Deduction(models.Model):
         ], limit=1)
 
         if not existing:
-            existing = self.sudo().create({
+            # create() computes the stored fields on its own.
+            return self.sudo().create({
                 'employee_id': employee_id,
                 'date':        target_date,
             })
-            existing.last_synced_deduction = existing.deduction
-            return existing
 
-        # The checks are computed and not stored, so re-reading them reflects
-        # the current attendance and leaves.
-        existing.invalidate_recordset(['core_check', 'daily_check', 'deduction'])
-        current = existing.deduction
+        # Read the stored value first, then recompute over it. Calling the
+        # compute directly is what refreshes a stored computed field whose real
+        # sources (attendance, leaves) are outside its @api.depends.
+        previous = existing.deduction or 0.0
+        existing._compute_checks()
 
         # A changed value sends the record back to Draft, so a reviewer sees
         # that what was posted no longer matches the attendance. Only an actual
         # change resets it — the daily cron and the public holiday resync
         # re-run _ensure_record over records that did not change, and those
         # must keep their status.
-        if abs((existing.last_synced_deduction or 0.0) - current) > HOUR_EPS:
-            existing.write({'state': 'draft', 'last_synced_deduction': current})
+        if abs(previous - (existing.deduction or 0.0)) > HOUR_EPS:
+            existing.state = 'draft'
 
         return existing
 

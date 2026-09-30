@@ -33,8 +33,8 @@
                     <field name="last_check_out"      widget="float_time"/>
                     <field name="effective_check_out" widget="float_time"/>
                     <field name="minus_minutes"       widget="float_time"/>
-                    <field name="total_worked_hours"  widget="float_time"/>
-                    <field name="actual_worked_hours" widget="float_time"/>
+                    <field name="total_worked_hours"  widget="float_time" sum="Total Worked"/>
+                    <field name="actual_worked_hours" widget="float_time" sum="Total Actual"/>
                 </list>
             </field>
         </record>
