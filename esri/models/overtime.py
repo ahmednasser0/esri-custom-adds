@@ -202,10 +202,10 @@ class Overtime(models.Model):
                 saturday_second = cfg.saturday_second_rate or 1.0
 
                 if self._is_office_boy(rec) and wh > hpd:
-                    # Office boy past a full day: ONLY the excess hours count as
-                    # overtime, weighted at the day/night rates by
-                    # _compute_overtime_split. The tier does not apply.
-                    total = (
+                    # Office boy past a full day: the full-day credit, PLUS the
+                    # excess hours weighted at the day/night rates by
+                    # _compute_overtime_split.
+                    total = saturday_second * hpd + (
                         rec.weighted_overtime_before_sunset + rec.weighted_overtime_after_sunset
                     )
                 elif wh >= hpd / 2.0 - HOUR_EPS:
