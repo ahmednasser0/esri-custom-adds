@@ -5,6 +5,12 @@ from .models import classify_day
 
 WEEKDAYS = {'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Sunday'}
 
+# Worked hours are built from hour + minute / 60.0, so an exact half-day shift
+# can land on 3.9999999999999996 instead of 4.0. Tier boundaries are compared
+# with this tolerance so such a shift still reaches the higher tier. It is far
+# below one minute (1/60 = 0.0167), so 3:59 stays in the lower tier.
+HOUR_EPS = 1e-6
+
 
 class Overtime(models.Model):
     _name        = 'hr.overtime'
@@ -199,16 +205,17 @@ class Overtime(models.Model):
                         )
                     else:
                         base = 0.0
-                        if 0 < wh <= hpd / 2.0:
-                            base = saturday_first  * hpd
-                        elif hpd / 2.0 < wh <= hpd:
+                        if wh >= hpd / 2.0 - HOUR_EPS:
                             base = saturday_second * hpd
+                        elif wh > 0:
+                            base = saturday_first  * hpd
                         rec.total_overtime_hours = max(base - wh, 0.0)
-                elif 0 < wh <= hpd / 2.0:
-                    rec.total_overtime_hours = saturday_first  * hpd
-                elif wh > hpd / 2.0:
-                    # Working beyond a full day still earns the full-day rate.
+                elif wh >= hpd / 2.0 - HOUR_EPS:
+                    # A half day or more earns the full-day rate, and working
+                    # beyond a full day still earns it.
                     rec.total_overtime_hours = saturday_second * hpd
+                elif wh > 0:
+                    rec.total_overtime_hours = saturday_first  * hpd
                 else:
                     rec.total_overtime_hours = 0.0
             else:
@@ -585,18 +592,18 @@ class Overtime(models.Model):
                             overtime = wh - hpd
                         else:
                             base = 0.0
-                            if 0 < wh <= hpd / 2.0:
-                                base = hpd / 2.0
-                            elif hpd / 2.0 < wh <= hpd:
+                            if wh >= hpd / 2.0 - HOUR_EPS:
                                 base = hpd
+                            elif wh > 0:
+                                base = hpd / 2.0
                             overtime = max(base - wh, 0.0)
                     else:
-                        # Staff: working beyond a full day still earns a full
-                        # day — never zero.
-                        if 0 < wh <= hpd / 2.0:
-                            overtime = hpd / 2.0
-                        elif wh > hpd / 2.0:
+                        # Staff: a half day or more earns a full day, and
+                        # working beyond a full day still earns one — never zero.
+                        if wh >= hpd / 2.0 - HOUR_EPS:
                             overtime = hpd
+                        elif wh > 0:
+                            overtime = hpd / 2.0
 
         return overtime
 
