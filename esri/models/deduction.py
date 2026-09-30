@@ -1,6 +1,6 @@
 from datetime import date, timedelta
 from odoo import fields, models, api
-from .models import classify_day
+from .models import HOUR_EPS, classify_day
 
 UTC_OFFSET = 3.0
 WEEKDAYS   = {'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Sunday'}
@@ -61,6 +61,14 @@ class Deduction(models.Model):
         help="الخصم: الأكبر بين Core Check و Daily Check مطبق عليه شرائح "
              "ربع/نص/يوم كامل، والغياب الكامل = يوم وربع. "
              "أيام العطلات الرسمية بدون خصم.",
+    )
+    last_synced_deduction = fields.Float(
+        string='Last Synced Deduction',
+        readonly=True,
+        copy=False,
+        help="قيمة الخصم وقت آخر مزامنة. Core Check و Daily Check و Deduction "
+             "حقول computed غير مخزّنة، فالحقل ده هو المرجع اللى بنعرف بيه إن "
+             "القيمة اتغيرت عشان السجل يرجع Draft. مش محتاج يظهر فى الواجهة.",
     )
 
     # ─── Helpers ─────────────────────────────────────────────────────────────
@@ -226,16 +234,37 @@ class Deduction(models.Model):
 
     @api.model
     def _ensure_record(self, employee_id, target_date):
-        """Create the (employee, date) record if it does not exist yet."""
+        """
+        Create the (employee, date) record if it does not exist yet, and send an
+        existing one back to Draft when its deduction no longer matches what was
+        last synced.
+        """
         existing = self.sudo().search([
             ('employee_id', '=', employee_id),
             ('date',        '=', target_date),
         ], limit=1)
+
         if not existing:
             existing = self.sudo().create({
                 'employee_id': employee_id,
                 'date':        target_date,
             })
+            existing.last_synced_deduction = existing.deduction
+            return existing
+
+        # The checks are computed and not stored, so re-reading them reflects
+        # the current attendance and leaves.
+        existing.invalidate_recordset(['core_check', 'daily_check', 'deduction'])
+        current = existing.deduction
+
+        # A changed value sends the record back to Draft, so a reviewer sees
+        # that what was posted no longer matches the attendance. Only an actual
+        # change resets it — the daily cron and the public holiday resync
+        # re-run _ensure_record over records that did not change, and those
+        # must keep their status.
+        if abs((existing.last_synced_deduction or 0.0) - current) > HOUR_EPS:
+            existing.write({'state': 'draft', 'last_synced_deduction': current})
+
         return existing
 
     @api.model

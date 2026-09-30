@@ -1,15 +1,9 @@
 from datetime import date, datetime, time, timedelta
 from odoo import fields, models, api
 from odoo.exceptions import UserError
-from .models import classify_day
+from .models import HOUR_EPS, classify_day
 
 WEEKDAYS = {'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Sunday'}
-
-# Worked hours are built from hour + minute / 60.0, so an exact half-day shift
-# can land on 3.9999999999999996 instead of 4.0. Tier boundaries are compared
-# with this tolerance so such a shift still reaches the higher tier. It is far
-# below one minute (1/60 = 0.0167), so 3:59 stays in the lower tier.
-HOUR_EPS = 1e-6
 
 
 class Overtime(models.Model):

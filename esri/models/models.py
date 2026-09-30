@@ -6,6 +6,12 @@ WEEKDAYS       = {'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Sunday'}
 STANDARD_HOURS = 8.0
 UTC_OFFSET     = 3.0
 
+# Hour values are built from hour + minute / 60.0, which carries float noise
+# (an exact 4h shift can land on 3.9999999999999996). Comparisons that must not
+# react to that noise — tier boundaries, and detecting a real change in a
+# computed value — use this tolerance. It is far below one minute (0.0167).
+HOUR_EPS = 1e-6
+
 DAY_SELECTION = [
     ('Monday',    'Monday'),
     ('Tuesday',   'Tuesday'),
