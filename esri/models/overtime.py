@@ -205,7 +205,8 @@ class Overtime(models.Model):
                         rec.total_overtime_hours = max(base - wh, 0.0)
                 elif 0 < wh <= hpd / 2.0:
                     rec.total_overtime_hours = saturday_first  * hpd
-                elif hpd / 2.0 < wh <= hpd:
+                elif wh > hpd / 2.0:
+                    # Working beyond a full day still earns the full-day rate.
                     rec.total_overtime_hours = saturday_second * hpd
                 else:
                     rec.total_overtime_hours = 0.0
@@ -586,9 +587,11 @@ class Overtime(models.Model):
                                 base = hpd
                             overtime = max(base - wh, 0.0)
                     else:
+                        # Staff: working beyond a full day still earns a full
+                        # day — never zero.
                         if 0 < wh <= hpd / 2.0:
                             overtime = hpd / 2.0
-                        elif hpd / 2.0 < wh <= hpd:
+                        elif wh > hpd / 2.0:
                             overtime = hpd
 
         return overtime
