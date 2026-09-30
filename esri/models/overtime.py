@@ -193,31 +193,29 @@ class Overtime(models.Model):
                     total = max(total - worked, 0.0)
                 rec.total_overtime_hours = total
             elif day_kind == 'weekend_second':
-                # Weekend overtime is based on ACTUAL worked hours
+                # Weekend overtime is based on ACTUAL worked hours, and the
+                # tiers are the same for every employee rule: a half day or
+                # more earns the full-day rate, anything less earns the
+                # half-day rate.
                 wh = self._get_actual_worked_hours_for(rec.employee_id, rec.date)
                 saturday_first  = cfg.saturday_first_rate  or 0.5
                 saturday_second = cfg.saturday_second_rate or 1.0
-                if self._is_office_boy(rec):
-                    if wh > hpd:
-                        # All worked hours weighted before/after sunset
-                        rec.total_overtime_hours = (
-                            rec.weighted_overtime_before_sunset + rec.weighted_overtime_after_sunset
-                        )
-                    else:
-                        base = 0.0
-                        if wh >= hpd / 2.0 - HOUR_EPS:
-                            base = saturday_second * hpd
-                        elif wh > 0:
-                            base = saturday_first  * hpd
-                        rec.total_overtime_hours = max(base - wh, 0.0)
-                elif wh >= hpd / 2.0 - HOUR_EPS:
-                    # A half day or more earns the full-day rate, and working
-                    # beyond a full day still earns it.
-                    rec.total_overtime_hours = saturday_second * hpd
+
+                if wh >= hpd / 2.0 - HOUR_EPS:
+                    total = saturday_second * hpd
                 elif wh > 0:
-                    rec.total_overtime_hours = saturday_first  * hpd
+                    total = saturday_first  * hpd
                 else:
-                    rec.total_overtime_hours = 0.0
+                    total = 0.0
+
+                # Office boy only: the hours beyond a full day are paid on top,
+                # weighted at the day/night rates by _compute_overtime_split.
+                if self._is_office_boy(rec) and wh > hpd:
+                    total += (
+                        rec.weighted_overtime_before_sunset + rec.weighted_overtime_after_sunset
+                    )
+
+                rec.total_overtime_hours = total
             else:
                 rec.total_overtime_hours = 0.0
 
@@ -584,26 +582,16 @@ class Overtime(models.Model):
                     if wh > 0:
                         overtime = hpd
                 else:
-                    if is_office_boy:
-                        if wh > hpd:
-                            # Only the hours BEYOND a full day are overtime;
-                            # they get split before/after sunset and weighted
-                            # at the day/night rates in _compute_overtime_split.
-                            overtime = wh - hpd
-                        else:
-                            base = 0.0
-                            if wh >= hpd / 2.0 - HOUR_EPS:
-                                base = hpd
-                            elif wh > 0:
-                                base = hpd / 2.0
-                            overtime = max(base - wh, 0.0)
-                    else:
-                        # Staff: a half day or more earns a full day, and
-                        # working beyond a full day still earns one — never zero.
-                        if wh >= hpd / 2.0 - HOUR_EPS:
-                            overtime = hpd
-                        elif wh > 0:
-                            overtime = hpd / 2.0
+                    # Same tiers for every employee rule. For the office boy
+                    # past a full day this field carries only the EXCESS, which
+                    # _compute_overtime_split then splits around sunset; the
+                    # full-day credit itself is added in _compute_total_overtime.
+                    if is_office_boy and wh > hpd:
+                        overtime = wh - hpd
+                    elif wh >= hpd / 2.0 - HOUR_EPS:
+                        overtime = hpd
+                    elif wh > 0:
+                        overtime = hpd / 2.0
 
         return overtime
 
