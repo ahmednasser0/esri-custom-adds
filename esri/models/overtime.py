@@ -95,8 +95,8 @@ class Overtime(models.Model):
         for rec in self:
             # Weekend-first/second days use a flat rate — no before/after
             # sunset split. Exception: office boy on the weekend-second day
-            # who worked MORE than a full day — all his worked hours are
-            # split before/after sunset.
+            # who worked MORE than a full day — the excess hours are split
+            # before/after sunset.
             cal      = rec.employee_id.resource_calendar_id if rec.employee_id else False
             day_kind = classify_day(cal, rec.date.strftime('%A')) if rec.date else 'weekday'
             if rec.date and self._is_public_holiday(rec.date):
@@ -118,7 +118,8 @@ class Overtime(models.Model):
             sunset = cal.sunset if cal and cal.sunset else 18.0
 
             if office_boy_sat:
-                # All worked hours split by the actual check-out time
+                # The excess hours (overtime_hours) are the last ones worked,
+                # so split them backwards from the actual check-out time.
                 att      = self._get_attendance(rec)
                 total_ot = rec.overtime_hours
                 if att and att.check_out and total_ot:
@@ -578,7 +579,10 @@ class Overtime(models.Model):
                 else:
                     if is_office_boy:
                         if wh > hpd:
-                            overtime = wh
+                            # Only the hours BEYOND a full day are overtime;
+                            # they get split before/after sunset and weighted
+                            # at the day/night rates in _compute_overtime_split.
+                            overtime = wh - hpd
                         else:
                             base = 0.0
                             if 0 < wh <= hpd / 2.0:
