@@ -106,9 +106,8 @@ class Deduction(models.Model):
 
         dayleave_hours = 0.0
         Overtime = self.env['hr.overtime']
-        # Only Worked Time types cover the core window. An Absence type leaves
-        # the window uncovered, so the employee counts as absent that day.
-        leaves = Overtime._get_worked_time_leaves(employee, target_date)
+        # Approved leaves cover the core window.
+        leaves = Overtime._get_approved_leaves(employee, target_date)
         for leave in leaves:
             start = end = 0.0
             if getattr(leave, 'request_unit_hours', False):

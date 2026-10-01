@@ -64,8 +64,7 @@ class DailyReport(models.Model):
         ])
 
     def _get_leaves(self, rec):
-        # Only Time Off types set to Worked Time count towards worked hours.
-        return self.env['hr.overtime']._get_worked_time_leaves(rec.employee_id, rec.date)
+        return self.env['hr.overtime']._get_approved_leaves(rec.employee_id, rec.date)
 
     @api.model
     def _leave_day_hours(self, leave):
