@@ -266,8 +266,13 @@ class Overtime(models.Model):
         alone. =ilike is an exact match that ignores case, so the ids are empty
         when no such type exists, and the two domains below then behave as
         'exclude nothing' and 'match nothing'.
+
+        active_test=False keeps archiving the type from silently turning its
+        existing leaves back into worked hours: search() hides archived records
+        by default, the ids would come back empty, and the worked-time domain
+        would then stop excluding them. Archiving only stops new requests.
         """
-        return self.env['hr.leave.type'].sudo().search(
+        return self.env['hr.leave.type'].sudo().with_context(active_test=False).search(
             [('name', '=ilike', OVERTIME_REQUEST_TYPE)]
         ).ids
 
