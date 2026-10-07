@@ -298,6 +298,63 @@ class Overtime(models.Model):
         ]))
 
     @api.model
+    def _overtime_request_hours(self, employee, target_date):
+        """
+        (start_hour, hours) of the approved Overtime Request covering
+        target_date, for an office assistant's weekday overtime.
+
+        The requested hours ARE the overtime. The employee files the request for
+        the overtime he did, and a request for more than that is honoured as
+        filed - the approval is the control, not the attendance.
+
+        start_hour is the request's own 'from' hour when it has one, so the
+        hours split around sunset where they actually fall. It comes back 0.0
+        for a day-based request, and the caller then keeps the hour at which the
+        full working day completes as the anchor.
+
+        Returns (0.0, 0.0) when there is no approved request.
+        """
+        type_ids = self._overtime_request_type_ids()
+        if not type_ids:
+            return 0.0, 0.0
+
+        leaves = self.env['hr.leave'].sudo().search([
+            ('employee_id',       '=',  employee.id),
+            ('request_date_from', '<=', target_date),
+            ('request_date_to',   '>=', target_date),
+            ('state',             '=',  'validate'),
+            ('holiday_status_id', 'in', type_ids),
+        ])
+
+        hours = 0.0
+        start = 0.0
+        for leave in leaves:
+            hours += self._leave_day_hours(leave)
+            if not getattr(leave, 'request_unit_hours', False):
+                continue
+            try:
+                hour_from = float(getattr(leave, 'request_hour_from', 0) or 0)
+            except (TypeError, ValueError):
+                hour_from = 0.0
+            # Earliest start across several requests on the same day.
+            if hour_from and (not start or hour_from < start):
+                start = hour_from
+
+        return start, hours
+
+    @api.model
+    def _is_request_driven_overtime(self, employee, target_date, day_kind):
+        """
+        True when this record's weekday overtime comes from an approved Overtime
+        Request rather than from the attendance. Office assistants only.
+        """
+        return (
+            day_kind == 'weekday'
+            and (employee.employee_rule or '') == 'office_assistant'
+            and self._has_approved_overtime_request(employee, target_date)
+        )
+
+    @api.model
     def _skip_weekday_overtime(self, employee, target_date, day_kind):
         """
         True when this employee earns no overtime on a regular weekday.
@@ -466,20 +523,24 @@ class Overtime(models.Model):
                 if end > start:
                     segments.append((start, end))
 
-            if not segments:
-                rec.overtime_start_time = 0.0
-                continue
-
             # ── Walk the timeline until hpd hours are completed ─────────────
+            result      = 0.0
             segments.sort()
             accumulated = 0.0
-            result      = 0.0
             for start, end in segments:
                 duration = end - start
                 if accumulated + duration >= hpd:
                     result = start + (hpd - accumulated)
                     break
                 accumulated += duration
+
+            # An office assistant's overtime is the approved request, so it
+            # starts where the request says. A day-based request carries no
+            # hours, and the moment the full day completes stays the anchor.
+            if self._is_request_driven_overtime(rec.employee_id, rec.date, day_kind):
+                request_start, _hours = self._overtime_request_hours(rec.employee_id, rec.date)
+                if request_start:
+                    result = request_start
 
             rec.overtime_start_time = result
 
@@ -496,6 +557,16 @@ class Overtime(models.Model):
 
             cfg       = self.env['esri.config'].get_config()
             ot_cutoff = cfg.overtime_cutoff or 19.0
+
+            # An office assistant's weekday overtime is exactly the approved
+            # Overtime Request, honoured as filed even when it is more than the
+            # attendance would show, so the cutoff does not clip it either.
+            cal      = rec.employee_id.resource_calendar_id
+            day_kind = classify_day(cal, rec.date.strftime('%A'))
+            if self._is_request_driven_overtime(rec.employee_id, rec.date, day_kind):
+                _start, hours = self._overtime_request_hours(rec.employee_id, rec.date)
+                rec.worked_overtime = max(hours, 0.0)
+                continue
 
             # Last physical check-out (local hour)
             last_out = 0.0
@@ -593,7 +664,11 @@ class Overtime(models.Model):
         # weekend-first/second days always follow the normal weekend rules.
         if not self._skip_weekday_overtime(emp, target_date, day_kind):
             if day_kind == 'weekday':
-                if att:
+                if self._is_request_driven_overtime(emp, target_date, day_kind):
+                    # The approved request is the overtime, not the attendance.
+                    _start, hours = self._overtime_request_hours(emp, target_date)
+                    overtime = max(hours, 0.0)
+                elif att:
                     overtime = att.over_time_worked_hours or 0.0
             elif day_kind in ('weekend_first', 'weekend_second'):
                 # Weekend overtime is based on ACTUAL worked hours
