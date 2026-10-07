@@ -46,6 +46,17 @@ class EsriConfig(models.Model):
         help="أقصى عدد ساعات عمل ممكن تتسجل للموظف فى اليوم الواحد (يستخدم فى الـ Daily Report).",
     )
 
+    overtime_request_type_id = fields.Many2one(
+        'hr.leave.type',
+        string='Overtime Request Time Off Type',
+        ondelete='set null',
+        help="نوع الإجازة اللى بيشتغل كتصريح إضافى. لما الموظف Office Assistant "
+             "ياخد approve على إجازة من النوع ده فى يوم عادى، يتحسبله overtime "
+             "فى اليوم ده. أى موظف بقاعدة تانية الإجازة دى مش بتعمل له حاجة، "
+             "والنوع ده نفسه مابيتحسبش ساعات عمل ولا إجازة لأى حد. "
+             "لو الحقل فاضى، مفيش Office Assistant هياخد overtime فى الأيام العادية.",
+    )
+
     # ─── Deduction rates (fraction of the daily work hours) ─────────────────
 
     company_day_hours = fields.Float(

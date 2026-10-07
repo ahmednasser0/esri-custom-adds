@@ -5,11 +5,6 @@ from .models import HOUR_EPS, classify_day
 
 WEEKDAYS = {'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Sunday'}
 
-# The Time Off Type that acts as an overtime permission, identified by its name.
-# An approved leave of this type is what lets an office assistant earn overtime
-# on a regular weekday. It never counts as worked time or time off for anyone.
-OVERTIME_REQUEST_TYPE = 'Overtime Request'
-
 
 class Overtime(models.Model):
     _name        = 'hr.overtime'
@@ -262,19 +257,16 @@ class Overtime(models.Model):
     @api.model
     def _overtime_request_type_ids(self):
         """
-        Ids of the Time Off Type(s) called Overtime Request, matched on the name
-        alone. =ilike is an exact match that ignores case, so the ids are empty
-        when no such type exists, and the two domains below then behave as
-        'exclude nothing' and 'match nothing'.
+        Ids of the Time Off Type that acts as an overtime permission, taken from
+        the Esri configuration. Empty when nothing is configured, and the two
+        domains below then behave as 'exclude nothing' and 'match nothing'.
 
-        active_test=False keeps archiving the type from silently turning its
-        existing leaves back into worked hours: search() hides archived records
-        by default, the ids would come back empty, and the worked-time domain
-        would then stop excluding them. Archiving only stops new requests.
+        Reading it through sudo() matters: the configuration is what every
+        worked-hours calculation now depends on, and an ordinary user who cannot
+        read esri.config would otherwise silently get a different result.
         """
-        return self.env['hr.leave.type'].sudo().with_context(active_test=False).search(
-            [('name', '=ilike', OVERTIME_REQUEST_TYPE)]
-        ).ids
+        leave_type = self.env['esri.config'].sudo().get_config().overtime_request_type_id
+        return leave_type.ids
 
     @api.model
     def _approved_leave_domain(self, employee, target_date):

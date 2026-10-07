@@ -13,6 +13,7 @@
                             <field name="max_worked_hours" widget="float_time"/>
                             <field name="overtime_rate_before_sunset"/>
                             <field name="overtime_rate_after_sunset"/>
+                            <field name="overtime_request_type_id" options="{'no_create': True}"/>
                         </group>
                         <group string="Weekend Overtime">
                             <field name="saturday_first_rate"/>
