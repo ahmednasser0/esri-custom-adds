@@ -1,0 +1,17 @@
+<odoo>
+    <data>
+
+        <!-- ─── Time Off Type: mark the Overtime Request type ─────────────── -->
+        <record model="ir.ui.view" id="hr_leave_type_form_esri">
+            <field name="name">hr.leave.type.form.esri</field>
+            <field name="model">hr.leave.type</field>
+            <field name="inherit_id" ref="hr_holidays.edit_holiday_status_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//sheet//group[1]" position="inside">
+                    <field name="is_overtime_request"/>
+                </xpath>
+            </field>
+        </record>
+
+    </data>
+</odoo>

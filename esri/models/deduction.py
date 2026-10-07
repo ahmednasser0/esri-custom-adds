@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from odoo import fields, models, api
+from odoo.exceptions import UserError
 from .models import HOUR_EPS, classify_day
 
 UTC_OFFSET = 3.0
@@ -253,8 +254,10 @@ class Deduction(models.Model):
 
         # Read the stored value first, then recompute over it. Calling the
         # compute directly is what refreshes a stored computed field whose real
-        # sources (attendance, leaves) are outside its @api.depends.
-        previous = existing.deduction or 0.0
+        # sources (attendance, leaves) are outside its @api.depends. The sync
+        # context lets it through the posted-record lock in write().
+        existing  = existing.with_context(deduction_sync=True)
+        previous  = existing.deduction or 0.0
         existing._compute_checks()
 
         # A changed value sends the record back to Draft, so a reviewer sees
@@ -277,7 +280,34 @@ class Deduction(models.Model):
     def _cron_create_daily_deductions(self):
         self._create_deductions_for_date(date.today() - timedelta(days=1))
 
-    # ─── Status bar transitions ────────────────────────────────────────────────
+    # ─── Posted records are locked ────────────────────────────────────────────
+
+    def write(self, vals):
+        # A posted record is final: its values cannot be edited by hand.
+        # Two things are still allowed, by design:
+        #   - writing 'state' alone, so Reset to Draft can unlock the record
+        #     and _ensure_record can flag it when the attendance changes;
+        #   - anything under the deduction_sync context, which is how
+        #     _ensure_record refreshes the stored checks.
+        if set(vals) - {'state'} and not self.env.context.get('deduction_sync'):
+            posted = self.filtered(lambda rec: rec.state == 'posted')
+            if posted:
+                raise UserError(
+                    "السجل Posted ومش ممكن تعديله. "
+                    "لو محتاج تغيّره، ارجّعه Draft الأول (زر Reset to Draft)."
+                )
+        return super().write(vals)
+
+    def unlink(self):
+        posted = self.filtered(lambda rec: rec.state == 'posted')
+        if posted:
+            raise UserError(
+                "السجل Posted ومش ممكن حذفه. "
+                "لو محتاج تحذفه، ارجّعه Draft الأول (زر Reset to Draft)."
+            )
+        return super().unlink()
+
+    # ─── Status bar transitions ───────────────────────────────────────────────
 
     def action_post(self):
         self.write({'state': 'posted'})

@@ -258,15 +258,46 @@ class Overtime(models.Model):
     @api.model
     def _approved_leave_domain(self, employee, target_date):
         """
-        Domain for the approved leaves covering target_date. Every Time Off
-        Type counts as worked time, whatever its configuration.
+        Domain for the approved leaves covering target_date that count as worked
+        time. Every Time Off Type counts, except the Overtime Request type: that
+        one is a permission marker, never worked time, for every employee rule.
         """
         return [
             ('employee_id',       '=',  employee.id),
             ('request_date_from', '<=', target_date),
             ('request_date_to',   '>=', target_date),
             ('state',             '=',  'validate'),
+            ('holiday_status_id.is_overtime_request', '=', False),
         ]
+
+    @api.model
+    def _has_approved_overtime_request(self, employee, target_date):
+        """True when the employee has an approved Overtime Request on that day."""
+        return bool(self.env['hr.leave'].sudo().search_count([
+            ('employee_id',       '=',  employee.id),
+            ('request_date_from', '<=', target_date),
+            ('request_date_to',   '>=', target_date),
+            ('state',             '=',  'validate'),
+            ('holiday_status_id.is_overtime_request', '=', True),
+        ]))
+
+    @api.model
+    def _skip_weekday_overtime(self, employee, target_date, day_kind):
+        """
+        True when this employee earns no overtime on a regular weekday.
+
+        Staff never do. An office assistant only does on a day where he has an
+        approved Overtime Request, so without one he is treated like staff.
+        Every other rule accrues weekday overtime as usual.
+        """
+        if day_kind != 'weekday':
+            return False
+        rule = employee.employee_rule or ''
+        if rule == 'staff':
+            return True
+        if rule == 'office_assistant':
+            return not self._has_approved_overtime_request(employee, target_date)
+        return False
 
     @api.model
     def _get_approved_leaves(self, employee, target_date):
@@ -361,10 +392,11 @@ class Overtime(models.Model):
                 rec.overtime_start_time = 0.0
                 continue
 
-            # Staff employees never accrue overtime on regular weekdays.
+            # Staff never accrue weekday overtime, and neither does an office
+            # assistant without an approved Overtime Request for that day.
             cal      = rec.employee_id.resource_calendar_id
             day_kind = classify_day(cal, rec.date.strftime('%A'))
-            if (rec.employee_id.employee_rule or '') == 'staff' and day_kind == 'weekday':
+            if self._skip_weekday_overtime(rec.employee_id, rec.date, day_kind):
                 rec.overtime_start_time = 0.0
                 continue
 
@@ -552,7 +584,6 @@ class Overtime(models.Model):
         cal           = emp.resource_calendar_id
         hpd           = cal.daily_work_hours if cal and cal.daily_work_hours else 8.0
         is_office_boy = (emp.employee_rule or '') == 'office_boy'
-        is_staff      = (emp.employee_rule or '') == 'staff'
 
         day_kind = classify_day(cal, target_date.strftime('%A'))
         # Public holidays follow the weekend-first rules for everyone
@@ -561,11 +592,10 @@ class Overtime(models.Model):
 
         overtime = 0.0
 
-        # Staff employee → no overtime on regular weekdays at all.
-        # The weekend-first/second days always follow the normal weekend rules.
-        staff_no_overtime = is_staff and day_kind == 'weekday'
-
-        if not staff_no_overtime:
+        # Staff never accrue weekday overtime, and neither does an office
+        # assistant without an approved Overtime Request for that day. The
+        # weekend-first/second days always follow the normal weekend rules.
+        if not self._skip_weekday_overtime(emp, target_date, day_kind):
             if day_kind == 'weekday':
                 if att:
                     overtime = att.over_time_worked_hours or 0.0
