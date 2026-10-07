@@ -239,6 +239,11 @@ class Deduction(models.Model):
         """
         Create the (employee, date) record if it does not exist yet, refresh its
         stored checks, and send it back to Draft when the deduction changed.
+
+        A posted record is frozen and skipped entirely. It is skipped here
+        rather than left to hit the lock in write(), because this runs inside
+        the attendance / leave / holiday sync: raising would abort the user's
+        save over an unrelated record they are not even editing.
         """
         existing = self.sudo().search([
             ('employee_id', '=', employee_id),
@@ -252,17 +257,18 @@ class Deduction(models.Model):
                 'date':        target_date,
             })
 
+        if existing.state == 'posted':
+            return existing
+
         # Read the stored value first, then recompute over it. Calling the
         # compute directly is what refreshes a stored computed field whose real
-        # sources (attendance, leaves) are outside its @api.depends. The sync
-        # context lets it through the posted-record lock in write().
-        existing  = existing.with_context(deduction_sync=True)
-        previous  = existing.deduction or 0.0
+        # sources (attendance, leaves) are outside its @api.depends.
+        previous = existing.deduction or 0.0
         existing._compute_checks()
 
         # A changed value sends the record back to Draft, so a reviewer sees
-        # that what was posted no longer matches the attendance. Only an actual
-        # change resets it — the daily cron and the public holiday resync
+        # that what was recorded no longer matches the attendance. Only an
+        # actual change resets it — the daily cron and the public holiday resync
         # re-run _ensure_record over records that did not change, and those
         # must keep their status.
         if abs(previous - (existing.deduction or 0.0)) > HOUR_EPS:
@@ -283,13 +289,13 @@ class Deduction(models.Model):
     # ─── Posted records are locked ────────────────────────────────────────────
 
     def write(self, vals):
-        # A posted record is final: its values cannot be edited by hand.
-        # Two things are still allowed, by design:
-        #   - writing 'state' alone, so Reset to Draft can unlock the record
-        #     and _ensure_record can flag it when the attendance changes;
-        #   - anything under the deduction_sync context, which is how
-        #     _ensure_record refreshes the stored checks.
-        if set(vals) - {'state'} and not self.env.context.get('deduction_sync'):
+        # A posted record is frozen: nothing may change its values, not even the
+        # attendance sync, which skips posted records in _ensure_record.
+        #
+        # Writing 'state' on its own stays allowed, and has to: it is the only
+        # way back out: without it Reset to Draft could not unlock the record
+        # and a posted record would be frozen permanently.
+        if set(vals) - {'state'}:
             posted = self.filtered(lambda rec: rec.state == 'posted')
             if posted:
                 raise UserError(

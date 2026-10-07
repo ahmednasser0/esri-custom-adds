@@ -214,7 +214,6 @@ class Overtime(models.Model):
     @api.depends('employee_id', 'date')
     def _compute_all_worked_hours(self):
         Attendance = self.env['hr.attendance'].sudo()
-        Leave      = self.env['hr.leave'].sudo()
         for rec in self:
             if not rec.employee_id or not rec.date:
                 rec.all_worked_hours = 0.0
@@ -551,26 +550,6 @@ class Overtime(models.Model):
     @api.model
     def _cron_create_daily_overtime(self):
         self._create_overtime_for_date(date.today() - timedelta(days=1))
-
-    _DAY_MAP = {'Monday': 0, 'Tuesday': 1, 'Wednesday': 2, 'Thursday': 3,
-                'Friday': 4, 'Saturday': 5, 'Sunday': 6}
-
-    @api.model
-    def _is_stuff_fullday(self, emp, day_name):
-        """Return True if employee is stuff AND their schedule's total hours for day_name
-        equals or exceeds daily_work_hours (full-day schedule for that weekday)."""
-        if (emp.employee_rule or '') != 'staff':
-            return False
-        cal = emp.resource_calendar_id
-        if not cal:
-            return False
-        dow = self._DAY_MAP.get(day_name)
-        if dow is None:
-            return False
-        day_lines   = cal.attendance_ids.filtered(lambda l: int(l.dayofweek) == dow)
-        sched_hours = sum(l.hour_to - l.hour_from for l in day_lines)
-        hpd         = cal.daily_work_hours or 8.0
-        return sched_hours >= hpd
 
     @api.model
     def _compute_overtime_hours_for_employee(self, emp, target_date):
