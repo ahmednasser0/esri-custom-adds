@@ -6,16 +6,17 @@
             <field name="name">deduction.form</field>
             <field name="model">deduction</field>
             <field name="arch" type="xml">
-                <form string="Deduction" create="false" delete="false">
+                <form string="Deduction" create="false">
                     <header>
                         <button name="action_post" string="Post" type="object"
                                 class="oe_highlight" invisible="state != 'draft'"/>
                         <button name="action_warning" string="Warning" type="object"
                                 invisible="state not in ('draft', 'posted')"/>
                         <button name="action_set_to_draft" string="Reset to Draft" type="object"
-                                invisible="state not in ('warning', 'archived')"/>
+                                invisible="was_posted or state not in ('warning', 'archived')"/>
                         <button name="action_archive_record" string="Archive" type="object"
                                 invisible="state == 'archived'"/>
+                        <field name="was_posted" invisible="1"/>
                         <field name="state" widget="statusbar" statusbar_visible="draft,posted,warning,archived"/>
                     </header>
                     <sheet>

@@ -33,6 +33,15 @@ class Deduction(models.Model):
         string='Work Entry',
     )
 
+    was_posted = fields.Boolean(
+        string='Was Posted',
+        readonly=True,
+        copy=False,
+        help="بيتعلّم أول مرة السجل يبقى Posted ومابيترجعش بعد كده. "
+             "طول ما هو متعلّم، قيم السجل مجمدة ومش ممكن يرجع Draft أبدًا، "
+             "حتى لو عدّى على Warning أو Archived. الحذف هو الطريق الوحيد.",
+    )
+
     state = fields.Selection(
         [
             ('draft',    'Draft'),
@@ -240,10 +249,10 @@ class Deduction(models.Model):
         Create the (employee, date) record if it does not exist yet, refresh its
         stored checks, and send it back to Draft when the deduction changed.
 
-        A posted record is frozen and skipped entirely. It is skipped here
-        rather than left to hit the lock in write(), because this runs inside
-        the attendance / leave / holiday sync: raising would abort the user's
-        save over an unrelated record they are not even editing.
+        A record that has been posted is frozen and skipped entirely. It is
+        skipped here rather than left to hit the lock in write(), because this
+        runs inside the attendance / leave / holiday sync: raising would abort
+        the user's save over an unrelated record they are not even editing.
         """
         existing = self.sudo().search([
             ('employee_id', '=', employee_id),
@@ -257,7 +266,7 @@ class Deduction(models.Model):
                 'date':        target_date,
             })
 
-        if existing.state == 'posted':
+        if existing.was_posted:
             return existing
 
         # Read the stored value first, then recompute over it. Calling the
@@ -289,28 +298,50 @@ class Deduction(models.Model):
     # ─── Posted records are locked ────────────────────────────────────────────
 
     def write(self, vals):
-        # A posted record is frozen: nothing may change its values, not even the
-        # attendance sync, which skips posted records in _ensure_record.
+        # Posting is final, and was_posted is what records that - not the
+        # current state. Going through Warning or Archived would otherwise be a
+        # way back to Draft, since both of those can be reset.
         #
-        # Writing 'state' on its own stays allowed, and has to: it is the only
-        # way back out: without it Reset to Draft could not unlock the record
-        # and a posted record would be frozen permanently.
-        if set(vals) - {'state'}:
-            posted = self.filtered(lambda rec: rec.state == 'posted')
-            if posted:
+        # So once a record has been posted its values are frozen (the sync skips
+        # it in _ensure_record) and it can never be Draft again. Deleting it is
+        # the only way to undo a post, and unlink() below clears the whole day
+        # with it so nothing rebuilds the record afterwards.
+        if set(vals) - {'state'} or vals.get('state') == 'draft':
+            locked = self.filtered(lambda rec: rec.was_posted)
+            if locked:
                 raise UserError(
-                    "السجل Posted ومش ممكن تعديله. "
-                    "لو محتاج تغيّره، ارجّعه Draft الأول (زر Reset to Draft)."
+                    "السجل اتعمله Post وبقى نهائى: مش ممكن تعديله ولا ترجيعه Draft. "
+                    "لو محتاج تلغيه، امسح السجل — وده هيمسح معاه الـ attendance "
+                    "والـ overtime والـ daily report بتاع نفس اليوم."
                 )
+
+        if vals.get('state') == 'posted':
+            vals = dict(vals, was_posted=True)
+
         return super().write(vals)
 
     def unlink(self):
-        posted = self.filtered(lambda rec: rec.state == 'posted')
-        if posted:
-            raise UserError(
-                "السجل Posted ومش ممكن حذفه. "
-                "لو محتاج تحذفه، ارجّعه Draft الأول (زر Reset to Draft)."
-            )
+        """
+        Deleting a deduction clears the whole day it was built from: the
+        attendance, the overtime record and the daily report for the same
+        (employee, date).
+
+        Without that, deleting the deduction alone would achieve nothing: the
+        next attendance save, leave approval or run of the daily cron would
+        rebuild it from the attendance that is still there.
+        """
+        Attendance  = self.env['hr.attendance'].sudo()
+        Overtime    = self.env['hr.overtime'].sudo()
+        DailyReport = self.env['daily.report'].sudo()
+
+        for rec in self:
+            if not rec.employee_id or not rec.date:
+                continue
+            employee = [('employee_id', '=', rec.employee_id.id)]
+            Overtime.search(employee + [('date', '=', rec.date)]).unlink()
+            DailyReport.search(employee + [('date', '=', rec.date)]).unlink()
+            Attendance.search(employee + [('attendance_date', '=', rec.date)]).unlink()
+
         return super().unlink()
 
     # ─── Status bar transitions ───────────────────────────────────────────────
