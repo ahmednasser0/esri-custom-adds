@@ -5,6 +5,11 @@ from .models import HOUR_EPS, classify_day
 
 WEEKDAYS = {'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Sunday'}
 
+# The Time Off Type that acts as an overtime permission, identified by its name.
+# An approved leave of this type is what lets an office assistant earn overtime
+# on a regular weekday. It never counts as worked time or time off for anyone.
+OVERTIME_REQUEST_TYPE = 'Overtime Request'
+
 
 class Overtime(models.Model):
     _name        = 'hr.overtime'
@@ -255,6 +260,18 @@ class Overtime(models.Model):
         return (leave.number_of_hours or 0.0) / max(total_days, 1)
 
     @api.model
+    def _overtime_request_type_ids(self):
+        """
+        Ids of the Time Off Type(s) called Overtime Request, matched on the name
+        alone. =ilike is an exact match that ignores case, so the ids are empty
+        when no such type exists, and the two domains below then behave as
+        'exclude nothing' and 'match nothing'.
+        """
+        return self.env['hr.leave.type'].sudo().search(
+            [('name', '=ilike', OVERTIME_REQUEST_TYPE)]
+        ).ids
+
+    @api.model
     def _approved_leave_domain(self, employee, target_date):
         """
         Domain for the approved leaves covering target_date that count as worked
@@ -266,18 +283,21 @@ class Overtime(models.Model):
             ('request_date_from', '<=', target_date),
             ('request_date_to',   '>=', target_date),
             ('state',             '=',  'validate'),
-            ('holiday_status_id.is_overtime_request', '=', False),
+            ('holiday_status_id', 'not in', self._overtime_request_type_ids()),
         ]
 
     @api.model
     def _has_approved_overtime_request(self, employee, target_date):
         """True when the employee has an approved Overtime Request on that day."""
+        type_ids = self._overtime_request_type_ids()
+        if not type_ids:
+            return False
         return bool(self.env['hr.leave'].sudo().search_count([
             ('employee_id',       '=',  employee.id),
             ('request_date_from', '<=', target_date),
             ('request_date_to',   '>=', target_date),
             ('state',             '=',  'validate'),
-            ('holiday_status_id.is_overtime_request', '=', True),
+            ('holiday_status_id', 'in', type_ids),
         ]))
 
     @api.model

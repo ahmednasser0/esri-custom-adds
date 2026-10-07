@@ -20,7 +20,6 @@ Management Attendance and Human Resources
     'data': [
         'security/ir.model.access.csv',
         'views/esri_config_view.xml',
-        'views/hr_leave_type.xml',
         'views/attendance_hr.xml',
         'views/deduction.xml',
         'views/employee_hr.xml',
