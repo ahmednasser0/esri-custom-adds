@@ -342,15 +342,20 @@ class Overtime(models.Model):
 
         return start, hours
 
+    # Employee rules whose overtime is claimed through an approved Overtime
+    # Request rather than read straight off the attendance. An office assistant
+    # claims that way on every kind of day; staff only on the weekend days,
+    # since they earn no weekday overtime at all, request or not.
+    REQUEST_DRIVEN_RULES = ('office_assistant', 'staff')
+
     @api.model
     def _is_request_driven_overtime(self, employee, target_date, day_kind):
         """
         True when this record's overtime comes from an approved Overtime Request
-        rather than straight from the attendance. Office assistants only, on any
-        kind of day.
+        rather than straight from the attendance.
         """
         return (
-            (employee.employee_rule or '') == 'office_assistant'
+            (employee.employee_rule or '') in self.REQUEST_DRIVEN_RULES
             and self._has_approved_overtime_request(employee, target_date)
         )
 
@@ -388,11 +393,11 @@ class Overtime(models.Model):
     def _weekend_rule_hours(self, employee, target_date, day_kind):
         """
         The hours a weekend rule is applied to: normally what the employee
-        actually worked, but for an office assistant the approved Overtime
-        Request stands in for them, so he earns nothing on a weekend without
-        one, exactly as on a weekday.
+        actually worked, but for the request-driven rules the approved Overtime
+        Request stands in for them, so they earn nothing on a weekend without
+        one. The office boy is the only rule still read off the attendance.
         """
-        if (employee.employee_rule or '') == 'office_assistant':
+        if (employee.employee_rule or '') in self.REQUEST_DRIVEN_RULES:
             return self._request_overtime_hours(employee, target_date, day_kind)
         return self._get_actual_worked_hours_for(employee, target_date)
 
