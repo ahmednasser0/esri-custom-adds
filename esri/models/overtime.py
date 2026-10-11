@@ -361,32 +361,23 @@ class Overtime(models.Model):
     @api.model
     def _request_overtime_hours(self, employee, target_date, day_kind):
         """
-        Hours an office assistant's approved Overtime Request is worth on that
-        day: what he filed, capped at the overtime he actually did.
+        Hours an approved Overtime Request is worth on that day, for the rules
+        that claim overtime through one.
 
-        The cap is what 'count the overtime hours, not more' means. The hours
-        available to claim differ by day:
-          - a weekday has a normal working day to cover first, so only what the
-            attendance reaches beyond it can be overtime;
-          - a weekend or public holiday has no normal day, so every hour worked
-            is available.
+        The requested hours stand on their own, exactly as attendance hours
+        would: they are not capped against the attendance, because a request
+        filed with no attendance at all has to count too, and capping it would
+        silently zero it.
 
-        Returns 0.0 when the employee is not an office assistant, has no
-        approved request, or did not actually work the hours he filed for.
+        Returns 0.0 for an employee whose rule does not claim through a request,
+        or who has no approved one — which is what makes attendance without a
+        request earn nothing.
         """
         if not self._is_request_driven_overtime(employee, target_date, day_kind):
             return 0.0
 
         _start, requested = self._overtime_request_hours(employee, target_date)
-        if requested <= 0:
-            return 0.0
-
-        cal    = employee.resource_calendar_id
-        hpd    = cal.daily_work_hours if cal and cal.daily_work_hours else 8.0
-        actual = self._get_actual_worked_hours_for(employee, target_date)
-        available = max(actual - hpd, 0.0) if day_kind == 'weekday' else actual
-
-        return min(requested, available)
+        return max(requested, 0.0)
 
     @api.model
     def _weekend_rule_hours(self, employee, target_date, day_kind):
