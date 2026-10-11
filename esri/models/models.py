@@ -1,16 +1,57 @@
+import pytz
+
 from odoo import models, fields, api
 
 # ─── Constants ───────────────────────────────────────────────────────────────
 
 WEEKDAYS       = {'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Sunday'}
 STANDARD_HOURS = 8.0
-UTC_OFFSET     = 3.0
 
 # Hour values are built from hour + minute / 60.0, which carries float noise
 # (an exact 4h shift can land on 3.9999999999999996). Comparisons that must not
 # react to that noise — tier boundaries, and detecting a real change in a
 # computed value — use this tolerance. It is far below one minute (0.0167).
 HOUR_EPS = 1e-6
+
+
+# ─── Local time ──────────────────────────────────────────────────────────────
+#
+# Odoo stores check_in / check_out in UTC, while every hour this module
+# configures — First Check-in Time, Overtime Cutoff, Sunset, the core window —
+# is a wall-clock hour where the employee works. The two have to be reconciled
+# before they are compared, and a fixed offset cannot do it: Cairo is UTC+3 in
+# summer and UTC+2 in winter, so a constant is an hour out for half the year.
+
+
+def employee_tz(employee):
+    """
+    The timezone an employee's attendance is read in: the Working Schedule's,
+    then the employee's own, then UTC.
+    """
+    if not employee:
+        return 'UTC'
+    cal = employee.resource_calendar_id
+    return (cal and cal.tz) or employee.tz or 'UTC'
+
+
+def to_local(dt, tz_name):
+    """A naive UTC datetime as a naive datetime on the local wall clock."""
+    if not dt:
+        return False
+    try:
+        tz = pytz.timezone(tz_name or 'UTC')
+    except pytz.UnknownTimeZoneError:
+        tz = pytz.utc
+    return pytz.utc.localize(dt).astimezone(tz).replace(tzinfo=None)
+
+
+def local_hour(dt, tz_name):
+    """
+    A naive UTC datetime as a float hour on the local wall clock — 17.5 for
+    17:30 — so it can be compared with the configured hours directly.
+    """
+    loc = to_local(dt, tz_name)
+    return (loc.hour + loc.minute / 60.0) if loc else 0.0
 
 DAY_SELECTION = [
     ('Monday',    'Monday'),
@@ -154,9 +195,9 @@ class HrAttendance(models.Model):
 
     # ─── Helper ──────────────────────────────────────────────────────────────
 
-    def _to_local_hour(self, dt):
-        """Convert a UTC datetime to a local float hour by adding UTC_OFFSET."""
-        return dt.hour + dt.minute / 60.0 + UTC_OFFSET
+    def _to_local_hour(self, dt, employee=None):
+        """The stored UTC datetime as a float hour on the employee's wall clock."""
+        return local_hour(dt, employee_tz(employee))
 
     def _get_calendar(self, rec):
         cal = rec.employee_id.resource_calendar_id if rec.employee_id else False
@@ -165,21 +206,32 @@ class HrAttendance(models.Model):
     def _effective_checkin_hour(self, rec):
         cal         = self._get_calendar(rec)
         first_ci    = cal.first_check_in if cal and cal.first_check_in else 7.0
-        checkin_local = self._to_local_hour(rec.check_in)
+        checkin_local = self._to_local_hour(rec.check_in, rec.employee_id)
         return max(checkin_local, first_ci)
 
     # ─── Compute Methods ─────────────────────────────────────────────────────
 
-    @api.depends('check_in')
+    @api.depends('check_in', 'check_out', 'employee_id.resource_calendar_id.tz')
     def _compute_day_name(self):
+        """
+        The weekday the attendance is attributed to, on the employee's wall
+        clock. It reads check_out, the same anchor as attendance_date, so the
+        two can never name different days: this field decides whether the day
+        counts as a weekday or a weekend, and attendance_date decides which
+        daily record the attendance belongs to. check_in is the fallback only
+        while the employee is still checked in and there is no check_out yet.
+        """
         for rec in self:
-            rec.day_name = rec.check_in.strftime('%A') if rec.check_in else False
+            dt  = rec.check_out or rec.check_in
+            loc = to_local(dt, employee_tz(rec.employee_id)) if dt else False
+            rec.day_name = loc.strftime('%A') if loc else False
 
-    @api.depends('check_out')
+    @api.depends('check_out', 'employee_id.resource_calendar_id.tz')
     def _compute_attendance_date(self):
-        """Extract date only from check_out (no time)."""
+        """The local date of check_out, date only."""
         for rec in self:
-            rec.attendance_date = rec.check_out.date() if rec.check_out else False
+            loc = to_local(rec.check_out, employee_tz(rec.employee_id)) if rec.check_out else False
+            rec.attendance_date = loc.date() if loc else False
 
     # --- Step 1 ---
 
@@ -203,7 +255,7 @@ class HrAttendance(models.Model):
             is_part_time = rec.employee_id and \
                 'part time' in (rec.employee_id.resource_calendar_id.name or '').lower()
 
-            checkin_local = self._to_local_hour(rec.check_in) if rec.check_in else 0.0
+            checkin_local = self._to_local_hour(rec.check_in, rec.employee_id) if rec.check_in else 0.0
             cal           = self._get_calendar(rec)
             hours_per_day = cal.daily_work_hours if cal and cal.daily_work_hours else STANDARD_HOURS
             last_co       = cal.last_check_out   if cal and cal.last_check_out   else 19.0
@@ -215,7 +267,7 @@ class HrAttendance(models.Model):
             if not is_part_time and rec.check_in and rec.check_out and not is_holiday \
                     and classify_day(cal, rec.day_name) == 'weekday' and checkin_local <= last_co:
                 checkin_effective  = self._effective_checkin_hour(rec)
-                checkout_local     = self._to_local_hour(rec.check_out)
+                checkout_local     = self._to_local_hour(rec.check_out, rec.employee_id)
                 checkout_effective = min(checkout_local, ot_cutoff)
                 raw_worked = checkout_effective - checkin_effective
                 rec.over_time_worked_hours = max(raw_worked - hours_per_day, 0.0)

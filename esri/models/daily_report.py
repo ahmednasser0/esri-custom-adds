@@ -1,7 +1,6 @@
 from datetime import date, timedelta
 from odoo import fields, models, api
-
-UTC_OFFSET = 3.0
+from .models import employee_tz, local_hour
 
 
 class DailyReport(models.Model):
@@ -122,6 +121,7 @@ class DailyReport(models.Model):
 
             cal      = rec.employee_id.resource_calendar_id
             first_ci = cal.first_check_in if cal and cal.first_check_in else 7.0
+            tz       = employee_tz(rec.employee_id)
 
             # ── Last physical check-out (local hour) ────────────────────────
             physical_out = 0.0
@@ -129,8 +129,8 @@ class DailyReport(models.Model):
             for att in atts:
                 if not att.check_in or not att.check_out:
                     continue
-                checkin_local  = att.check_in.hour  + att.check_in.minute  / 60.0 + UTC_OFFSET
-                checkout_local = att.check_out.hour + att.check_out.minute / 60.0 + UTC_OFFSET
+                checkin_local  = local_hour(att.check_in,  tz)
+                checkout_local = local_hour(att.check_out, tz)
                 checkin_effective = max(checkin_local, first_ci)
                 worked += max(checkout_local - checkin_effective, 0.0)
                 physical_out = max(physical_out, checkout_local)

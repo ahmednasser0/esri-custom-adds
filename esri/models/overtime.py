@@ -1,7 +1,7 @@
 from datetime import date, datetime, time, timedelta
 from odoo import fields, models, api
 from odoo.exceptions import UserError
-from .models import HOUR_EPS, classify_day
+from .models import HOUR_EPS, classify_day, employee_tz, local_hour
 
 WEEKDAYS = {'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Sunday'}
 
@@ -91,7 +91,6 @@ class Overtime(models.Model):
     @api.depends('employee_id', 'date', 'overtime_hours',
                  'overtime_start_time', 'worked_overtime')
     def _compute_overtime_split(self):
-        UTC_OFFSET = 3.0
         for rec in self:
             # Weekend-first/second days use a flat rate — no before/after
             # sunset split. Exception: office boy on the weekend-second day
@@ -123,7 +122,7 @@ class Overtime(models.Model):
                 att      = self._get_attendance(rec)
                 total_ot = rec.overtime_hours
                 if att and att.check_out and total_ot:
-                    checkout_local = att.check_out.hour + att.check_out.minute / 60.0 + UTC_OFFSET
+                    checkout_local = local_hour(att.check_out, employee_tz(rec.employee_id))
                     if checkout_local > sunset:
                         after  = min(checkout_local - sunset, total_ot)
                         before = total_ot - after
@@ -453,13 +452,13 @@ class Overtime(models.Model):
         (worked hours + approved time off) minus the time beyond the
         overtime cutoff, capped at the configured max worked hours.
         """
-        UTC_OFFSET = 3.0
         cfg       = self.env['esri.config'].get_config()
         ot_cutoff = cfg.overtime_cutoff or 19.0
         max_wh    = cfg.max_worked_hours or 12.0
 
         cal      = employee.resource_calendar_id
         first_ci = cal.first_check_in if cal and cal.first_check_in else 7.0
+        tz       = employee_tz(employee)
 
         atts = self.env['hr.attendance'].sudo().search([
             ('employee_id',     '=', employee.id),
@@ -470,8 +469,8 @@ class Overtime(models.Model):
         for att in atts:
             if not att.check_in or not att.check_out:
                 continue
-            checkin_local  = att.check_in.hour  + att.check_in.minute  / 60.0 + UTC_OFFSET
-            checkout_local = att.check_out.hour + att.check_out.minute / 60.0 + UTC_OFFSET
+            checkin_local  = local_hour(att.check_in,  tz)
+            checkout_local = local_hour(att.check_out, tz)
             checkin_effective = max(checkin_local, first_ci)
             worked += max(checkout_local - checkin_effective, 0.0)
             last_out = max(last_out, checkout_local)
@@ -503,7 +502,6 @@ class Overtime(models.Model):
         Example: work 9:00-13:00 (4h) then approved business mission
         13:00-20:00 -> the 8th hour completes at 17:00 -> overtime starts 17:00.
         """
-        UTC_OFFSET = 3.0
         Attendance = self.env['hr.attendance'].sudo()
         Leave      = self.env['hr.leave'].sudo()
 
@@ -523,6 +521,7 @@ class Overtime(models.Model):
             hpd      = cal.daily_work_hours if cal and cal.daily_work_hours else 8.0
             first_ci = cal.first_check_in   if cal and cal.first_check_in   else 7.0
             last_co  = cal.last_check_out   if cal and cal.last_check_out   else 19.0
+            tz       = employee_tz(rec.employee_id)
 
             segments = []
 
@@ -534,9 +533,9 @@ class Overtime(models.Model):
             for att in atts:
                 if not att.check_in:
                     continue
-                start = max(att.check_in.hour + att.check_in.minute / 60.0 + UTC_OFFSET, first_ci)
+                start = max(local_hour(att.check_in, tz), first_ci)
                 if att.check_out:
-                    end = att.check_out.hour + att.check_out.minute / 60.0 + UTC_OFFSET
+                    end = local_hour(att.check_out, tz)
                 else:
                     end = 24.0   # still checked in — open until end of day
                 if end > start:
@@ -590,7 +589,6 @@ class Overtime(models.Model):
 
     @api.depends('overtime_start_time')
     def _compute_worked_overtime(self):
-        UTC_OFFSET = 3.0
         Attendance = self.env['hr.attendance'].sudo()
         Leave      = self.env['hr.leave'].sudo()
 
@@ -619,7 +617,7 @@ class Overtime(models.Model):
             ])
             for att in atts:
                 if att.check_out:
-                    out_local = att.check_out.hour + att.check_out.minute / 60.0 + UTC_OFFSET
+                    out_local = local_hour(att.check_out, employee_tz(rec.employee_id))
                     last_out = max(last_out, out_local)
 
             # End ('to') of hour-based approved leaves

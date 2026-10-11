@@ -1,9 +1,7 @@
 from datetime import date, timedelta
 from odoo import fields, models, api
 from odoo.exceptions import UserError
-from .models import HOUR_EPS, classify_day
-
-UTC_OFFSET = 3.0
+from .models import HOUR_EPS, classify_day, employee_tz, local_hour
 WEEKDAYS   = {'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Sunday'}
 
 LATE_GRACE_MINUTES  = 15   # gap <= this many minutes -> quarter day (free once/month)
@@ -105,12 +103,12 @@ class Deduction(models.Model):
             ('employee_id',     '=', employee.id),
             ('attendance_date', '=', target_date),
         ])
+        tz = employee_tz(employee)
         for att in atts:
             if not att.check_in:
                 continue
-            start = att.check_in.hour + att.check_in.minute / 60.0 + UTC_OFFSET
-            end   = (att.check_out.hour + att.check_out.minute / 60.0 + UTC_OFFSET) \
-                if att.check_out else 24.0
+            start = local_hour(att.check_in, tz)
+            end   = local_hour(att.check_out, tz) if att.check_out else 24.0
             if end > start:
                 intervals.append((start, end))
 
