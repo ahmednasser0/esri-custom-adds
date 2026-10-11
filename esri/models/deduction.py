@@ -328,7 +328,10 @@ class Deduction(models.Model):
         next attendance save, leave approval or run of the daily cron would
         rebuild it from the attendance that is still there.
         """
-        Attendance  = self.env['hr.attendance'].sudo()
+        # The sync flag marks this unlink as the one that owns the day, so
+        # hr.attendance.unlink() does not turn round and delete this record
+        # while it is already being deleted here.
+        Attendance  = self.env['hr.attendance'].sudo().with_context(_esri_syncing=True)
         Overtime    = self.env['hr.overtime'].sudo()
         DailyReport = self.env['daily.report'].sudo()
 
