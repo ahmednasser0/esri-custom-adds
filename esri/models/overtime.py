@@ -352,24 +352,41 @@ class Overtime(models.Model):
         _start, requested = self._overtime_request_hours(employee, target_date)
         return max(requested, 0.0)
 
+    # The office boy is outside the Overtime Request scheme entirely: his
+    # overtime is still read straight off his attendance, on every kind of day,
+    # with no request needed and a request adding nothing.
+    ATTENDANCE_ONLY_RULES = ('office_boy',)
+
+    @api.model
+    def _is_attendance_only(self, employee):
+        return (employee.employee_rule or '') in self.ATTENDANCE_ONLY_RULES
+
     @api.model
     def _day_worked_hours(self, employee, target_date):
         """
-        What the day is worth in hours: the attendance plus the approved
-        Overtime Request, which counts as time attended rather than as a
-        separate claim. Overtime is then whatever this reaches beyond a full
-        working day, and on a weekend it is what the weekend rule reads.
+        What the day is worth in hours: the attendance, plus the approved
+        Overtime Request, which counts as time attended rather than as a claim
+        of its own. Overtime is then whatever this reaches beyond a full working
+        day, and on a weekend it is what the weekend rule reads.
+
+        An attendance-only rule ignores the request and counts the attendance
+        alone.
         """
-        return (self._get_actual_worked_hours_for(employee, target_date)
-                + self._request_hours(employee, target_date))
+        worked = self._get_actual_worked_hours_for(employee, target_date)
+        if self._is_attendance_only(employee):
+            return worked
+        return worked + self._request_hours(employee, target_date)
 
     @api.model
     def _skip_overtime(self, employee, target_date):
         """
-        True when the day earns no overtime at all, for any employee rule and
-        any kind of day: overtime is only ever earned against an approved
-        Overtime Request, so hours worked without one are not counted.
+        True when the day earns no overtime at all. Overtime is only earned
+        against an approved Overtime Request, whatever the rule and whatever the
+        kind of day — except for the attendance-only rules, which never need
+        one.
         """
+        if self._is_attendance_only(employee):
+            return False
         return not self._has_approved_overtime_request(employee, target_date)
 
     @api.model
