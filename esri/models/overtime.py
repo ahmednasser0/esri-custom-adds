@@ -104,7 +104,7 @@ class Overtime(models.Model):
             office_boy_sat = False
             if skip_day and day_kind == 'weekend_second' and rec.employee_id and self._is_office_boy(rec):
                 hpd = cal.daily_work_hours if cal and cal.daily_work_hours else 8.0
-                wh  = self._get_actual_worked_hours_for(rec.employee_id, rec.date)
+                wh  = self._day_worked_hours(rec.employee_id, rec.date)
                 if wh > hpd:
                     skip_day       = False
                     office_boy_sat = True
@@ -174,6 +174,12 @@ class Overtime(models.Model):
             if self._is_public_holiday(rec.date):
                 day_kind = 'weekend_first'
 
+            # No approved Overtime Request, no overtime - whatever the rule,
+            # whatever the day. Hours worked without one are not counted.
+            if self._skip_overtime(rec.employee_id, rec.date):
+                rec.total_overtime_hours = 0.0
+                continue
+
             if day_kind == 'weekday':
                 rec.total_overtime_hours = (
                     rec.weighted_overtime_before_sunset + rec.weighted_overtime_after_sunset
@@ -181,14 +187,13 @@ class Overtime(models.Model):
             elif day_kind == 'weekend_first':
                 # Same rule for every employee rule: working at all on the
                 # weekend-first day earns the flat Friday rate.
-                worked = self._weekend_rule_hours(rec.employee_id, rec.date, day_kind)
+                worked = self._day_worked_hours(rec.employee_id, rec.date)
                 rec.total_overtime_hours = (cfg.friday_rate or 2.0) * hpd if worked > 0 else 0.0
             elif day_kind == 'weekend_second':
-                # Weekend overtime is based on ACTUAL worked hours, and the
-                # tiers are the same for every employee rule: a half day or
+                # The tiers are the same for every employee rule: a half day or
                 # more earns the full-day rate, anything less earns the
                 # half-day rate.
-                wh = self._weekend_rule_hours(rec.employee_id, rec.date, day_kind)
+                wh = self._day_worked_hours(rec.employee_id, rec.date)
                 saturday_first  = cfg.saturday_first_rate  or 0.5
                 saturday_second = cfg.saturday_second_rate or 1.0
 
@@ -341,73 +346,31 @@ class Overtime(models.Model):
 
         return start, hours
 
-    # Employee rules whose overtime is claimed through an approved Overtime
-    # Request rather than read straight off the attendance. An office assistant
-    # claims that way on every kind of day; staff only on the weekend days,
-    # since they earn no weekday overtime at all, request or not.
-    REQUEST_DRIVEN_RULES = ('office_assistant', 'staff')
-
     @api.model
-    def _is_request_driven_overtime(self, employee, target_date, day_kind):
-        """
-        True when this record's overtime comes from an approved Overtime Request
-        rather than straight from the attendance.
-        """
-        return (
-            (employee.employee_rule or '') in self.REQUEST_DRIVEN_RULES
-            and self._has_approved_overtime_request(employee, target_date)
-        )
-
-    @api.model
-    def _request_overtime_hours(self, employee, target_date, day_kind):
-        """
-        Hours an approved Overtime Request is worth on that day, for the rules
-        that claim overtime through one.
-
-        The requested hours stand on their own, exactly as attendance hours
-        would: they are not capped against the attendance, because a request
-        filed with no attendance at all has to count too, and capping it would
-        silently zero it.
-
-        Returns 0.0 for an employee whose rule does not claim through a request,
-        or who has no approved one — which is what makes attendance without a
-        request earn nothing.
-        """
-        if not self._is_request_driven_overtime(employee, target_date, day_kind):
-            return 0.0
-
+    def _request_hours(self, employee, target_date):
+        """Hours of the approved Overtime Request on that day, 0.0 if none."""
         _start, requested = self._overtime_request_hours(employee, target_date)
         return max(requested, 0.0)
 
     @api.model
-    def _weekend_rule_hours(self, employee, target_date, day_kind):
+    def _day_worked_hours(self, employee, target_date):
         """
-        The hours a weekend rule is applied to: normally what the employee
-        actually worked, but for the request-driven rules the approved Overtime
-        Request stands in for them, so they earn nothing on a weekend without
-        one. The office boy is the only rule still read off the attendance.
+        What the day is worth in hours: the attendance plus the approved
+        Overtime Request, which counts as time attended rather than as a
+        separate claim. Overtime is then whatever this reaches beyond a full
+        working day, and on a weekend it is what the weekend rule reads.
         """
-        if (employee.employee_rule or '') in self.REQUEST_DRIVEN_RULES:
-            return self._request_overtime_hours(employee, target_date, day_kind)
-        return self._get_actual_worked_hours_for(employee, target_date)
+        return (self._get_actual_worked_hours_for(employee, target_date)
+                + self._request_hours(employee, target_date))
 
     @api.model
-    def _skip_weekday_overtime(self, employee, target_date, day_kind):
+    def _skip_overtime(self, employee, target_date):
         """
-        True when this employee earns no overtime on a regular weekday.
-
-        Staff never do. An office assistant only does on a day where he has an
-        approved Overtime Request, so without one he is treated like staff.
-        Every other rule accrues weekday overtime as usual.
+        True when the day earns no overtime at all, for any employee rule and
+        any kind of day: overtime is only ever earned against an approved
+        Overtime Request, so hours worked without one are not counted.
         """
-        if day_kind != 'weekday':
-            return False
-        rule = employee.employee_rule or ''
-        if rule == 'staff':
-            return True
-        if rule == 'office_assistant':
-            return not self._has_approved_overtime_request(employee, target_date)
-        return False
+        return not self._has_approved_overtime_request(employee, target_date)
 
     @api.model
     def _get_approved_leaves(self, employee, target_date):
@@ -501,11 +464,10 @@ class Overtime(models.Model):
                 rec.overtime_start_time = 0.0
                 continue
 
-            # Staff never accrue weekday overtime, and neither does an office
-            # assistant without an approved Overtime Request for that day.
+            # Overtime is only earned against an approved Overtime Request.
             cal      = rec.employee_id.resource_calendar_id
             day_kind = classify_day(cal, rec.date.strftime('%A'))
-            if self._skip_weekday_overtime(rec.employee_id, rec.date, day_kind):
+            if self._skip_overtime(rec.employee_id, rec.date):
                 rec.overtime_start_time = 0.0
                 continue
 
@@ -580,52 +542,27 @@ class Overtime(models.Model):
 
     @api.depends('overtime_start_time')
     def _compute_worked_overtime(self):
-        Attendance = self.env['hr.attendance'].sudo()
-        Leave      = self.env['hr.leave'].sudo()
+        """
+        The overtime hours on a weekday: whatever the day reaches beyond a full
+        working day, counting the approved Overtime Request as time attended.
 
+        A full day plus a two hour request earns two. Six hours plus a two hour
+        request reaches eight and earns nothing. Ten hours with no request at
+        all earns nothing either - overtime is only earned against a request.
+        """
         for rec in self:
             if not rec.employee_id or not rec.date or not rec.overtime_start_time:
                 rec.worked_overtime = 0.0
                 continue
 
-            cfg       = self.env['esri.config'].get_config()
-            ot_cutoff = cfg.overtime_cutoff or 19.0
-
-            # An office assistant's overtime is the approved Overtime Request,
-            # capped at the overtime he actually did.
-            cal      = rec.employee_id.resource_calendar_id
-            day_kind = classify_day(cal, rec.date.strftime('%A'))
-            if self._is_request_driven_overtime(rec.employee_id, rec.date, day_kind):
-                rec.worked_overtime = self._request_overtime_hours(
-                    rec.employee_id, rec.date, day_kind)
+            if self._skip_overtime(rec.employee_id, rec.date):
+                rec.worked_overtime = 0.0
                 continue
 
-            # Last physical check-out (local hour)
-            last_out = 0.0
-            atts = Attendance.search([
-                ('employee_id',     '=', rec.employee_id.id),
-                ('attendance_date', '=', rec.date),
-            ])
-            for att in atts:
-                if att.check_out:
-                    out_local = local_hour(att.check_out, employee_tz(rec.employee_id))
-                    last_out = max(last_out, out_local)
-
-            # End ('to') of hour-based approved leaves
-            leaves = Leave.search(
-                self._approved_leave_domain(rec.employee_id, rec.date)
-            )
-            for leave in leaves:
-                if getattr(leave, 'request_unit_hours', False):
-                    hour_to = getattr(leave, 'request_hour_to', False)
-                    try:
-                        hour_to = float(hour_to) if hour_to else 0.0
-                    except (TypeError, ValueError):
-                        hour_to = 0.0
-                    last_out = max(last_out, hour_to)
-
-            effective_out = min(last_out, ot_cutoff) if last_out else 0.0
-            rec.worked_overtime = max(effective_out - rec.overtime_start_time, 0.0)
+            cal   = rec.employee_id.resource_calendar_id
+            hpd   = cal.daily_work_hours if cal and cal.daily_work_hours else 8.0
+            total = self._day_worked_hours(rec.employee_id, rec.date)
+            rec.worked_overtime = max(total - hpd, 0.0)
 
     _sql_constraints = [
         ('unique_employee_date', 'UNIQUE(employee_id, date)',
@@ -694,21 +631,16 @@ class Overtime(models.Model):
         # Staff never accrue weekday overtime, and neither does an office
         # assistant without an approved Overtime Request for that day. The
         # weekend-first/second days always follow the normal weekend rules.
-        is_request_driven = self._is_request_driven_overtime(emp, target_date, day_kind)
-
-        if not self._skip_weekday_overtime(emp, target_date, day_kind):
+        # Overtime is only ever earned against an approved Overtime Request,
+        # for every employee rule and every kind of day.
+        if not self._skip_overtime(emp, target_date):
             if day_kind == 'weekday':
-                if is_request_driven:
-                    # The approved request is the overtime, not the attendance.
-                    overtime = self._request_overtime_hours(emp, target_date, day_kind)
-                elif att:
-                    overtime = att.over_time_worked_hours or 0.0
+                # The request counts as time attended; the overtime is what the
+                # day reaches beyond a full working day once it is included.
+                overtime = max(self._day_worked_hours(emp, target_date) - hpd, 0.0)
             elif day_kind in ('weekend_first', 'weekend_second'):
-                # Weekend overtime is based on ACTUAL worked hours
-                # (worked + approved time off - beyond-cutoff time, capped).
-                # For an office assistant the approved request stands in for
-                # those hours, so the weekend rule is applied to what he filed.
-                wh = self._weekend_rule_hours(emp, target_date, day_kind)
+                # The weekend rule reads the attendance plus the request.
+                wh = self._day_worked_hours(emp, target_date)
                 if day_kind == 'weekend_first':
                     if wh > 0:
                         overtime = hpd
