@@ -362,6 +362,35 @@ class Overtime(models.Model):
         return (employee.employee_rule or '') in self.ATTENDANCE_ONLY_RULES
 
     @api.model
+    def _request_end_hour(self, employee, target_date):
+        """
+        The local hour the approved Overtime Request runs to, 0.0 when it has
+        no explicit window. It is what a weekend day has in place of a
+        check-out, since the attendance is not counted on one.
+        """
+        type_ids = self._overtime_request_type_ids()
+        if not type_ids:
+            return 0.0
+
+        leaves = self.env['hr.leave'].sudo().search([
+            ('employee_id',       '=',  employee.id),
+            ('request_date_from', '<=', target_date),
+            ('request_date_to',   '>=', target_date),
+            ('state',             '=',  'validate'),
+            ('holiday_status_id', 'in', type_ids),
+        ])
+        end = 0.0
+        for leave in leaves:
+            if not getattr(leave, 'request_unit_hours', False):
+                continue
+            try:
+                hour_to = float(getattr(leave, 'request_hour_to', 0) or 0)
+            except (TypeError, ValueError):
+                hour_to = 0.0
+            end = max(end, hour_to)
+        return end
+
+    @api.model
     def _day_worked_hours(self, employee, target_date, day_kind):
         """
         What the day is worth in hours for the overtime calculation.

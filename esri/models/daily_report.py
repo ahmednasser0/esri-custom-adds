@@ -1,6 +1,6 @@
 from datetime import date, timedelta
 from odoo import fields, models, api
-from .models import employee_tz, local_hour
+from .models import classify_day, employee_tz, local_hour
 
 
 class DailyReport(models.Model):
@@ -116,12 +116,29 @@ class DailyReport(models.Model):
                 rec.actual_worked_hours = 0.0
                 continue
 
-            atts   = self._get_attendances(rec)
-            leaves = self._get_leaves(rec)
-
             cal      = rec.employee_id.resource_calendar_id
             first_ci = cal.first_check_in if cal and cal.first_check_in else 7.0
             tz       = employee_tz(rec.employee_id)
+            Overtime = self.env['hr.overtime']
+            day_kind = classify_day(cal, rec.date.strftime('%A'))
+
+            # On a weekend day the attendance and the time off are not worked
+            # hours at all: only what was approved in advance on an Overtime
+            # Request counts, and the day is worth exactly that. The office boy
+            # is outside the scheme and keeps reading his attendance.
+            if day_kind != 'weekday' and not Overtime._is_attendance_only(rec.employee_id):
+                hours    = Overtime._request_hours(rec.employee_id, rec.date)
+                last_out = Overtime._request_end_hour(rec.employee_id, rec.date)
+                minus    = max(last_out - ot_cutoff, 0.0)
+                rec.last_check_out      = last_out
+                rec.effective_check_out = min(last_out, ot_cutoff) if last_out else 0.0
+                rec.minus_minutes       = minus
+                rec.total_worked_hours  = hours
+                rec.actual_worked_hours = min(max(hours - minus, 0.0), max_wh)
+                continue
+
+            atts   = self._get_attendances(rec)
+            leaves = self._get_leaves(rec)
 
             # ── Last physical check-out (local hour) ────────────────────────
             physical_out = 0.0
