@@ -104,7 +104,7 @@ class Overtime(models.Model):
             office_boy_sat = False
             if skip_day and day_kind == 'weekend_second' and rec.employee_id and self._is_office_boy(rec):
                 hpd = cal.daily_work_hours if cal and cal.daily_work_hours else 8.0
-                wh  = self._day_worked_hours(rec.employee_id, rec.date)
+                wh  = self._day_worked_hours(rec.employee_id, rec.date, day_kind)
                 if wh > hpd:
                     skip_day       = False
                     office_boy_sat = True
@@ -187,13 +187,13 @@ class Overtime(models.Model):
             elif day_kind == 'weekend_first':
                 # Same rule for every employee rule: working at all on the
                 # weekend-first day earns the flat Friday rate.
-                worked = self._day_worked_hours(rec.employee_id, rec.date)
+                worked = self._day_worked_hours(rec.employee_id, rec.date, day_kind)
                 rec.total_overtime_hours = (cfg.friday_rate or 2.0) * hpd if worked > 0 else 0.0
             elif day_kind == 'weekend_second':
                 # The tiers are the same for every employee rule: a half day or
                 # more earns the full-day rate, anything less earns the
                 # half-day rate.
-                wh = self._day_worked_hours(rec.employee_id, rec.date)
+                wh = self._day_worked_hours(rec.employee_id, rec.date, day_kind)
                 saturday_first  = cfg.saturday_first_rate  or 0.5
                 saturday_second = cfg.saturday_second_rate or 1.0
 
@@ -362,20 +362,29 @@ class Overtime(models.Model):
         return (employee.employee_rule or '') in self.ATTENDANCE_ONLY_RULES
 
     @api.model
-    def _day_worked_hours(self, employee, target_date):
+    def _day_worked_hours(self, employee, target_date, day_kind):
         """
-        What the day is worth in hours: the attendance, plus the approved
-        Overtime Request, which counts as time attended rather than as a claim
-        of its own. Overtime is then whatever this reaches beyond a full working
-        day, and on a weekend it is what the weekend rule reads.
+        What the day is worth in hours for the overtime calculation.
 
-        An attendance-only rule ignores the request and counts the attendance
-        alone.
+        On a weekday it is the attendance plus the approved Overtime Request,
+        which counts as time attended rather than as a claim of its own, and
+        overtime is whatever that reaches beyond a full working day.
+
+        On a weekend day it is the request alone. Attendance and time off on a
+        weekend are not worked hours at all; only what was approved in advance
+        counts, and the weekend rule is applied to that.
+
+        An attendance-only rule is outside the scheme and always counts the
+        attendance alone.
         """
-        worked = self._get_actual_worked_hours_for(employee, target_date)
         if self._is_attendance_only(employee):
-            return worked
-        return worked + self._request_hours(employee, target_date)
+            return self._get_actual_worked_hours_for(employee, target_date)
+
+        requested = self._request_hours(employee, target_date)
+        if day_kind != 'weekday':
+            return requested
+
+        return self._get_actual_worked_hours_for(employee, target_date) + requested
 
     @api.model
     def _skip_overtime(self, employee, target_date):
@@ -576,9 +585,12 @@ class Overtime(models.Model):
                 rec.worked_overtime = 0.0
                 continue
 
-            cal   = rec.employee_id.resource_calendar_id
-            hpd   = cal.daily_work_hours if cal and cal.daily_work_hours else 8.0
-            total = self._day_worked_hours(rec.employee_id, rec.date)
+            # This field only drives the weekday sunset split; the weekend days
+            # are paid by their own rule in _compute_total_overtime.
+            cal      = rec.employee_id.resource_calendar_id
+            hpd      = cal.daily_work_hours if cal and cal.daily_work_hours else 8.0
+            day_kind = classify_day(cal, rec.date.strftime('%A'))
+            total    = self._day_worked_hours(rec.employee_id, rec.date, day_kind)
             rec.worked_overtime = max(total - hpd, 0.0)
 
     _sql_constraints = [
@@ -654,10 +666,10 @@ class Overtime(models.Model):
             if day_kind == 'weekday':
                 # The request counts as time attended; the overtime is what the
                 # day reaches beyond a full working day once it is included.
-                overtime = max(self._day_worked_hours(emp, target_date) - hpd, 0.0)
+                overtime = max(self._day_worked_hours(emp, target_date, day_kind) - hpd, 0.0)
             elif day_kind in ('weekend_first', 'weekend_second'):
                 # The weekend rule reads the attendance plus the request.
-                wh = self._day_worked_hours(emp, target_date)
+                wh = self._day_worked_hours(emp, target_date, day_kind)
                 if day_kind == 'weekend_first':
                     if wh > 0:
                         overtime = hpd
