@@ -356,66 +356,12 @@ class HrAttendance(models.Model):
 
     def unlink(self):
         """
-        Deleting an attendance refreshes the day it belonged to, and clears the
-        day's records when nothing is left on it.
+        Deleting an attendance leaves the day's records as they are.
 
-        Without this the daily figures outlive the attendance they were built
-        from: they are stored columns, so nothing recomputes them on read, and
-        the daily cron only ever revisits yesterday.
+        The overtime, the daily report and the deduction keep the last values
+        they were given, as a record of what the day was worth when it was
+        worked out. Nothing is recomputed and nothing is removed - deleting the
+        deduction or the daily report itself is what forces a fresh
+        calculation, and that stays the deliberate way to do it.
         """
-        # An internal sync that is already handling the day passes the flag and
-        # does not want a second pass over it.
-        if self.env.context.get('_esri_syncing'):
-            return super().unlink()
-
-        # The days have to be read BEFORE the records go, and resynced AFTER,
-        # so the recomputation sees the day without them.
-        days = {
-            (rec.employee_id.id, rec.attendance_date)
-            for rec in self
-            if rec.employee_id and rec.attendance_date
-        }
-
-        res = super().unlink()
-
-        if days:
-            self.with_context(_esri_syncing=True)._esri_resync_days(days)
-        return res
-
-    def _esri_resync_days(self, days):
-        Attendance  = self.env['hr.attendance'].sudo()
-        Overtime    = self.env['hr.overtime'].sudo()
-        Employee    = self.env['hr.employee'].sudo()
-        # Deleting a daily report or a deduction normally rebuilds it from the
-        # attendance. Here the attendance is what has just gone, so the flag
-        # says this delete is meant to stand.
-        DailyReport = self.env['daily.report'].sudo().with_context(_esri_syncing=True)
-        Deduction   = self.env['deduction'].sudo().with_context(_esri_syncing=True)
-
-        for employee_id, day in days:
-            employee = Employee.browse(employee_id)
-            if not employee.exists():
-                continue
-
-            still_has_attendance = Attendance.search_count([
-                ('employee_id',     '=', employee_id),
-                ('attendance_date', '=', day),
-            ])
-            # An approved leave is real data for the day even with no
-            # attendance left, so the records stay and are refreshed instead.
-            still_has_leave = bool(Overtime._get_approved_leaves(employee, day))
-
-            if still_has_attendance or still_has_leave:
-                Overtime._ensure_record(employee_id, day)
-                DailyReport._ensure_record(employee_id, day)
-                Deduction._ensure_record(employee_id, day)
-                continue
-
-            # Nothing left on the day: drop its records.
-            key = [('employee_id', '=', employee_id), ('date', '=', day)]
-            Overtime.search(key).unlink()
-            DailyReport.search(key).unlink()
-            # A posted deduction is final and is left alone, exactly as the
-            # sync leaves it alone. Deleting it here would undo a post through
-            # the back door.
-            Deduction.search(key).filtered(lambda d: not d.was_posted).unlink()
+        return super().unlink()

@@ -327,17 +327,12 @@ class Deduction(models.Model):
         is how you force a stale figure to be worked out again - and, since a
         posted record is frozen and cannot return to Draft, it is also how a
         post is undone: what comes back is a fresh Draft.
-
-        The attendance sync clears a day whose attendance is gone, and passes
-        the sync flag when it does, so the record is not rebuilt out from under
-        it there.
         """
-        rebuild = not self.env.context.get('_esri_syncing')
         days = {
             (rec.employee_id.id, rec.date)
             for rec in self
             if rec.employee_id and rec.date
-        } if rebuild else set()
+        }
 
         res = super().unlink()
 

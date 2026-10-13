@@ -220,16 +220,12 @@ class DailyReport(models.Model):
         they stand now, for today or for any day in the past, and the record
         comes back. Deleting it is how a stale row is refreshed - the daily cron
         only ever revisits yesterday, so nothing else would reach an older one.
-
-        The attendance sync clears a day whose attendance is gone, and passes
-        the sync flag when it does, so the record is not rebuilt there.
         """
-        rebuild = not self.env.context.get('_esri_syncing')
         days = {
             (rec.employee_id.id, rec.date)
             for rec in self
             if rec.employee_id and rec.date
-        } if rebuild else set()
+        }
 
         res = super().unlink()
 
