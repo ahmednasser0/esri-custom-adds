@@ -320,30 +320,30 @@ class Deduction(models.Model):
 
     def unlink(self):
         """
-        Deleting a deduction clears the whole day it was built from: the
-        attendance, the overtime record and the daily report for the same
-        (employee, date).
+        Deleting a deduction recalculates it rather than destroying the day.
 
-        Without that, deleting the deduction alone would achieve nothing: the
-        next attendance save, leave approval or run of the daily cron would
-        rebuild it from the attendance that is still there.
+        The attendance stays where it is. The record is dropped and rebuilt from
+        whatever the attendance and the Working Schedule say now, so deleting it
+        is how you force a stale figure to be worked out again - and, since a
+        posted record is frozen and cannot return to Draft, it is also how a
+        post is undone: what comes back is a fresh Draft.
+
+        The attendance sync clears a day whose attendance is gone, and passes
+        the sync flag when it does, so the record is not rebuilt out from under
+        it there.
         """
-        # The sync flag marks this unlink as the one that owns the day, so
-        # hr.attendance.unlink() does not turn round and delete this record
-        # while it is already being deleted here.
-        Attendance  = self.env['hr.attendance'].sudo().with_context(_esri_syncing=True)
-        Overtime    = self.env['hr.overtime'].sudo()
-        DailyReport = self.env['daily.report'].sudo()
+        rebuild = not self.env.context.get('_esri_syncing')
+        days = {
+            (rec.employee_id.id, rec.date)
+            for rec in self
+            if rec.employee_id and rec.date
+        } if rebuild else set()
 
-        for rec in self:
-            if not rec.employee_id or not rec.date:
-                continue
-            employee = [('employee_id', '=', rec.employee_id.id)]
-            Overtime.search(employee + [('date', '=', rec.date)]).unlink()
-            DailyReport.search(employee + [('date', '=', rec.date)]).unlink()
-            Attendance.search(employee + [('attendance_date', '=', rec.date)]).unlink()
+        res = super().unlink()
 
-        return super().unlink()
+        for employee_id, day in days:
+            self._ensure_record(employee_id, day)
+        return res
 
     # ─── Status bar transitions ───────────────────────────────────────────────
 

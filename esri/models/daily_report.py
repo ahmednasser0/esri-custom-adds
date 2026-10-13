@@ -212,6 +212,31 @@ class DailyReport(models.Model):
         existing._compute_daily_values()
         return existing
 
+    def unlink(self):
+        """
+        Deleting a daily report recalculates it rather than removing it.
+
+        The figures are worked out again from the attendance and the leaves as
+        they stand now, for today or for any day in the past, and the record
+        comes back. Deleting it is how a stale row is refreshed - the daily cron
+        only ever revisits yesterday, so nothing else would reach an older one.
+
+        The attendance sync clears a day whose attendance is gone, and passes
+        the sync flag when it does, so the record is not rebuilt there.
+        """
+        rebuild = not self.env.context.get('_esri_syncing')
+        days = {
+            (rec.employee_id.id, rec.date)
+            for rec in self
+            if rec.employee_id and rec.date
+        } if rebuild else set()
+
+        res = super().unlink()
+
+        for employee_id, day in days:
+            self._ensure_record(employee_id, day)
+        return res
+
     @api.model
     def _create_daily_report_for_date(self, target_date):
         employees = self.env['hr.employee'].sudo().search([('active', '=', True)])

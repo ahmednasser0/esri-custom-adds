@@ -363,10 +363,8 @@ class HrAttendance(models.Model):
         from: they are stored columns, so nothing recomputes them on read, and
         the daily cron only ever revisits yesterday.
         """
-        # deduction.unlink() clears the day by deleting its attendance, and
-        # this method deletes the day's deduction. Each would re-enter the
-        # other and try to delete the same record twice, so whichever started
-        # owns the day and flags it.
+        # An internal sync that is already handling the day passes the flag and
+        # does not want a second pass over it.
         if self.env.context.get('_esri_syncing'):
             return super().unlink()
 
@@ -387,9 +385,12 @@ class HrAttendance(models.Model):
     def _esri_resync_days(self, days):
         Attendance  = self.env['hr.attendance'].sudo()
         Overtime    = self.env['hr.overtime'].sudo()
-        DailyReport = self.env['daily.report'].sudo()
-        Deduction   = self.env['deduction'].sudo()
         Employee    = self.env['hr.employee'].sudo()
+        # Deleting a daily report or a deduction normally rebuilds it from the
+        # attendance. Here the attendance is what has just gone, so the flag
+        # says this delete is meant to stand.
+        DailyReport = self.env['daily.report'].sudo().with_context(_esri_syncing=True)
+        Deduction   = self.env['deduction'].sudo().with_context(_esri_syncing=True)
 
         for employee_id, day in days:
             employee = Employee.browse(employee_id)
