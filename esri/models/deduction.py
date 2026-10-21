@@ -7,6 +7,13 @@ WEEKDAYS   = {'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Sunday'}
 LATE_GRACE_MINUTES  = 15   # gap <= this many minutes -> quarter day (free once/month)
 LATE_HALF_DAY_LIMIT = 60   # gap <= 60 minutes -> half day
 
+# The gaps are built out of local hours (hour + minute / 60.0), so a shortfall
+# that is exactly an hour on the clock can come out of the arithmetic as
+# 60.00000000000011 minutes. Comparing that against a tier limit with a bare
+# <= puts the day in the tier above: a whole day instead of a half one, for the
+# same hour of absence. Every tier comparison is made with this tolerance.
+MINUTE_EPS = HOUR_EPS * 60.0
+
 
 class Deduction(models.Model):
     _name        = 'deduction'
@@ -174,8 +181,11 @@ class Deduction(models.Model):
             if classify_day(cal, day.strftime('%A')) == 'weekday' and \
                     not self.env['hr.overtime']._is_public_holiday(day):
                 core, daily = self._day_gap(employee, day)
-                gap = max(core, daily)
-                if 0 < gap * 60 <= LATE_GRACE_MINUTES:
+                # Same tolerance as the tiering in _compute_checks, so the day
+                # that spends the monthly grace is exactly the day the compute
+                # would have put in the grace tier.
+                gap_minutes = max(core, daily) * 60.0
+                if MINUTE_EPS < gap_minutes <= LATE_GRACE_MINUTES + MINUTE_EPS:
                     return True
             day += timedelta(days=1)
         return False
@@ -217,19 +227,19 @@ class Deduction(models.Model):
             # (attendance policy is still evaluated against the employee's
             # own Working Schedule hpd; only the deducted AMOUNT uses the
             # company-wide Company Day Hours)
-            if daily >= hpd:
+            if daily >= hpd - HOUR_EPS:
                 rec.deduction = absence_rate * company_hours
                 continue
 
             gap_minutes = max(core, daily) * 60.0
-            if gap_minutes <= 0:
+            if gap_minutes <= MINUTE_EPS:
                 rec.deduction = 0.0
-            elif gap_minutes <= LATE_GRACE_MINUTES:
+            elif gap_minutes <= LATE_GRACE_MINUTES + MINUTE_EPS:
                 if self._grace_used_this_month(rec.employee_id, rec.date):
                     rec.deduction = quarter_rate * company_hours
                 else:
                     rec.deduction = 0.0   # free once per month
-            elif gap_minutes <= LATE_HALF_DAY_LIMIT:
+            elif gap_minutes <= LATE_HALF_DAY_LIMIT + MINUTE_EPS:
                 rec.deduction = half_rate * company_hours
             else:
                 rec.deduction = full_rate * company_hours
