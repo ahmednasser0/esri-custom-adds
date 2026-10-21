@@ -5,7 +5,7 @@ from .models import HOUR_EPS, classify_day, employee_tz, local_hour
 WEEKDAYS   = {'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Sunday'}
 
 LATE_GRACE_MINUTES  = 15   # gap <= this many minutes -> quarter day (free once/month)
-LATE_HALF_DAY_LIMIT = 60   # gap <= 60 minutes -> half day
+LATE_HALF_DAY_LIMIT = 60   # gap under 60 minutes -> half day; a full hour -> whole day
 
 # The gaps are built out of local hours (hour + minute / 60.0), so a shortfall
 # that is exactly an hour on the clock can come out of the arithmetic as
@@ -239,7 +239,7 @@ class Deduction(models.Model):
                     rec.deduction = quarter_rate * company_hours
                 else:
                     rec.deduction = 0.0   # free once per month
-            elif gap_minutes <= LATE_HALF_DAY_LIMIT + MINUTE_EPS:
+            elif gap_minutes < LATE_HALF_DAY_LIMIT - MINUTE_EPS:
                 rec.deduction = half_rate * company_hours
             else:
                 rec.deduction = full_rate * company_hours
