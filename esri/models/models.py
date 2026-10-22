@@ -174,6 +174,7 @@ class HrAttendance(models.Model):
             ('both',      'Both'),
         ],
         string='Missing Punch',
+        help="Process the attendance record adjustments.",
     )
 
     # ─── Step 1 : Raw total overtime ──────────────────────────────────────────

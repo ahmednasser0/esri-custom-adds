@@ -22,31 +22,31 @@ class DailyReport(models.Model):
         string='Last Check Out',
         compute='_compute_daily_values',
         store=True,
-        help="الأكبر بين آخر انصراف فعلى فى اليوم ونهاية الـ time off المعتمد (وقت 'إلى').",
+        help="Based on the latest recorded check-out time from either the Attendance or Time Off module.",
     )
     effective_check_out = fields.Float(
         string='Effective Check-Out',
         compute='_compute_daily_values',
         store=True,
-        help="Last Check Out بحد أقصى الـ Overtime Cutoff من الإعدادات.",
+        help="The latest recorded check-out time from either the Attendance or Time Off module, capped at the Overtime Cutoff time configured in the settings.",
     )
     minus_minutes = fields.Float(
         string='Minus Minutes',
         compute='_compute_daily_values',
         store=True,
-        help="الفرق بين Last Check Out والـ Overtime Cutoff لو الانصراف بعده، وإلا صفر.",
+        help="The time difference between Last Check Out and the Overtime Cutoff",
     )
     total_worked_hours = fields.Float(
         string='Total Worked Hours',
         compute='_compute_daily_values',
         store=True,
-        help="ساعات العمل الفعلية + الإجازات المعتمدة فى اليوم.",
+        help="Total actual working hours plus approved time off hours for the day",
     )
     actual_worked_hours = fields.Float(
         string='Actual Worked Hours',
         compute='_compute_daily_values',
         store=True,
-        help="(Total Worked Hours - Minus Minutes) بحد أقصى Max Worked Hours من الإعدادات.",
+        help="The actual number of working hours to be considered for calculation",
     )
 
     _sql_constraints = [

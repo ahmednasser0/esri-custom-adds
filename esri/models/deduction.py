@@ -36,15 +36,14 @@ class Deduction(models.Model):
     work_entry = fields.Many2one(
         'hr.work.entry',
         string='Work Entry',
+        help="Work Entries generated for Payroll.",
     )
 
     was_posted = fields.Boolean(
         string='Was Posted',
         readonly=True,
         copy=False,
-        help="بيتعلّم أول مرة السجل يبقى Posted ومابيترجعش بعد كده. "
-             "طول ما هو متعلّم، قيم السجل مجمدة ومش ممكن يرجع Draft أبدًا، "
-             "حتى لو عدّى على Warning أو Archived. الحذف هو الطريق الوحيد.",
+        help="Once marked as Posted, the record remains permanently Posted, and its values are frozen. It cannot be reverted to Draft, even after being moved to Warning or Archived. Deletion is the only way to remove the record.",
     )
 
     state = fields.Selection(
@@ -70,22 +69,19 @@ class Deduction(models.Model):
         string='Core Check',
         compute='_compute_checks',
         store=True,
-        help="الوقت الغير مغطى (لا حضور ولا إجازة معتمدة) داخل الفترة الأساسية "
-             "من Late Check-in Limit إلى Early Check-out Limit.",
+        help="Uncovered time within the core period",
     )
     daily_check = fields.Float(
         string='Daily Check',
         compute='_compute_checks',
         store=True,
-        help="الفرق بين ساعات اليوم الكامل والـ Actual Worked Hours (صفر لو الموظف كمل يومه).",
+        help="The difference between full-day hours and Actual Worked Hours",
     )
     deduction = fields.Float(
         string='Deduction',
         compute='_compute_checks',
         store=True,
-        help="الخصم: الأكبر بين Core Check و Daily Check مطبق عليه شرائح "
-             "ربع/نص/يوم كامل، والغياب الكامل = يوم وربع. "
-             "أيام العطلات الرسمية بدون خصم.",
+        help="Deduction: The higher of Core Check and Daily Check, calculated according to the Deduction Policy configured in the settings and No deductions apply on Public holidays",
     )
 
     # ─── Helpers ─────────────────────────────────────────────────────────────

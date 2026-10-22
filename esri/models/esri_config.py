@@ -11,50 +11,51 @@ class EsriConfig(models.Model):
         string='Overtime Rate Before Sunset',
         default=1.35,
         required=True,
+        help="Hourly rate applied before sunset",
     )
     overtime_rate_after_sunset = fields.Float(
         string='Overtime Rate After Sunset',
         default=1.70,
         required=True,
+        help="Hourly rate applied after sunset",
     )
     saturday_first_rate = fields.Float(
         string='Saturday First Rate (1–3 hrs)',
         default=0.5,
         required=True,
+        help="The first 4 hours are rounded up to half a day.",
     )
     saturday_second_rate = fields.Float(
         string='Saturday Second Rate (4–8 hrs)',
         default=1.0,
         required=True,
+        help="The Second 4 hours are rounded up to a Full day.",
     )
     friday_rate = fields.Float(
         string='Friday Rate',
         default=2.0,
         required=True,
+        help="The day is calculated as a decimal value Any hours recorded on public holidays or the first weekend day are multiplied by the number of days",
     )
     overtime_cutoff = fields.Float(
         string='Overtime Cutoff Time',
         default=19.0,
         required=True,
-        help="الوقت الأقصى لحساب الـ overtime (24h format). مثال: 19.0 = 7 مساء.",
+        help="The hours are calculated as a decimal value based on a 24-hour day The maximum time considered for overtime calculation and for calculate Actual Worked Hours",
     )
 
     max_worked_hours = fields.Float(
         string='Max Worked Hours',
         default=12.0,
         required=True,
-        help="أقصى عدد ساعات عمل ممكن تتسجل للموظف فى اليوم الواحد (يستخدم فى الـ Daily Report).",
+        help="The hours are calculated as a decimal value based on a 24-hour day The maximum number of working hours that can be recorded for an employee per day, used in the Daily Report",
     )
 
     overtime_request_type_id = fields.Many2one(
         'hr.leave.type',
         string='Overtime Request Time Off Type',
         ondelete='set null',
-        help="نوع الإجازة اللى بيشتغل كتصريح إضافى. لما الموظف Office Assistant "
-             "ياخد approve على إجازة من النوع ده فى يوم عادى، يتحسبله overtime "
-             "فى اليوم ده. أى موظف بقاعدة تانية الإجازة دى مش بتعمل له حاجة، "
-             "والنوع ده نفسه مابيتحسبش ساعات عمل ولا إجازة لأى حد. "
-             "لو الحقل فاضى، مفيش Office Assistant هياخد overtime فى الأيام العادية.",
+        help="The time-off type used as an additional authorization for staff and office assistant",
     )
 
     # ─── Deduction rates (fraction of the daily work hours) ─────────────────
@@ -63,34 +64,31 @@ class EsriConfig(models.Model):
         string='Company Day Hours',
         default=8.0,
         required=True,
-        help="عدد ساعات اليوم اللى بيتحسب عليها الخصم الفعلى (الشرائح والغياب). "
-             "تقييم الحضور/الانصراف (Core Check / Daily Check) لسه بيعتمد على "
-             "Daily Work Hours بتاع الـ Working Schedule؛ الحقل ده بس بيتحكم "
-             "فى عدد الساعات اللى بتتضرب فيها نسب الخصم.",
+        help="The number of daily hours used to calculate actual deductions",
     )
     deduction_quarter_rate = fields.Float(
         string='First Tier Deduction Rate (1–15 min)',
         default=0.25,
         required=True,
-        help="نسبة الخصم من ساعات اليوم للتأخير أو الانصراف المبكر من 1 لـ 15 دقيقة. مثال: 0.25 = ربع يوم.",
+        help="The day is calculated as a decimal value The deduction rate applied to daily working hours for lateness or early check-out of 1–15 minutes. For example, 0.25 represents a quarter-day deduction",
     )
     deduction_half_rate = fields.Float(
         string='Second Tier Deduction Rate (16–60 min)',
         default=0.5,
         required=True,
-        help="نسبة الخصم من ساعات اليوم للتأخير أو الانصراف المبكر من 16 لـ 60 دقيقة. مثال: 0.5 = نص يوم.",
+        help="The day is calculated as a decimal value The deduction rate applied to daily working hours for lateness or early check-out of 16–60 minutes. For example, 0.5 represents a half-day deduction",
     )
     deduction_full_rate = fields.Float(
         string='Third Tier Deduction Rate (> 60 min)',
         default=1.0,
         required=True,
-        help="نسبة الخصم من ساعات اليوم للتأخير أو الانصراف المبكر أكثر من ساعة. مثال: 1.0 = يوم كامل.",
+        help="The day is calculated as a decimal value The deduction rate applied to daily working hours for lateness or early check-out exceeding 60 minutes. For example, 1.0 represents a full-day deduction",
     )
     absence_deduction_rate = fields.Float(
         string='Absence Deduction Rate',
         default=1.25,
         required=True,
-        help="نسبة الخصم من ساعات اليوم في حالة الغياب بدون إذن. مثال: 1.25 = يوم وربع.",
+        help="The day is calculated as a decimal value The deduction rate applied to daily working hours for unauthorized absence. For example, 1.25 represents a one-and-a-quarter-day deduction",
     )
 
     @api.model

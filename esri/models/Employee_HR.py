@@ -11,4 +11,5 @@ class HrEmployee(models.Model):
             ('office_boy',       'Office Boy'),
         ],
         string='Employee Rule',
+        help="Select the employee transaction type to customize overtime and deduction calculations",
     )
