@@ -21,7 +21,7 @@ public holidays change.
 * Working hours, weekend days, core hours, rates and tiers are all settings
     """,
 
-    'author': "Ahmad Nasser",
+    'author': "Global Business Solutions",
     'website': "https://www.gbs-eg.com",
 
     'category': 'Human Resources',
