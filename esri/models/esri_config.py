@@ -73,16 +73,16 @@ class EsriConfig(models.Model):
         help="The day is calculated as a decimal value The deduction rate applied to daily working hours for lateness or early check-out of 1–15 minutes. For example, 0.25 represents a quarter-day deduction",
     )
     deduction_half_rate = fields.Float(
-        string='Second Tier Deduction Rate (16–60 min)',
+        string='Second Tier Deduction Rate (16–59 min)',
         default=0.5,
         required=True,
-        help="The day is calculated as a decimal value The deduction rate applied to daily working hours for lateness or early check-out of 16–60 minutes. For example, 0.5 represents a half-day deduction",
+        help="The day is calculated as a decimal value The deduction rate applied to daily working hours for lateness or early check-out of 16–59 minutes. For example, 0.5 represents a half-day deduction",
     )
     deduction_full_rate = fields.Float(
-        string='Third Tier Deduction Rate (> 60 min)',
+        string='Third Tier Deduction Rate (60 min or more)',
         default=1.0,
         required=True,
-        help="The day is calculated as a decimal value The deduction rate applied to daily working hours for lateness or early check-out exceeding 60 minutes. For example, 1.0 represents a full-day deduction",
+        help="The day is calculated as a decimal value The deduction rate applied to daily working hours for lateness or early check-out of 60 minutes or more. For example, 1.0 represents a full-day deduction",
     )
     absence_deduction_rate = fields.Float(
         string='Absence Deduction Rate',
