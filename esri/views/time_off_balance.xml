@@ -52,11 +52,20 @@
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">No balance rows yet</p>
             <p>
-                A row is written for every employee each day. To fill in a
-                period that was never covered, run
-                <code>generate_for_period</code> on this model.
+                A row is written for every employee each day. To build the year,
+                pick <b>Generate This Year</b> from the Actions menu.
             </p>
         </field>
+    </record>
+
+    <!-- ─── Build the year from the Actions menu ───────────────────────── -->
+    <record id="action_generate_time_off_balance_year" model="ir.actions.server">
+        <field name="name">Generate This Year</field>
+        <field name="model_id" ref="model_time_off_balance"/>
+        <field name="binding_model_id" ref="model_time_off_balance"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">action = env['time.off.balance'].action_generate_year()</field>
     </record>
 
     <menuitem id="menu_time_off_balance"

@@ -178,22 +178,34 @@ class TimeOffBalance(models.Model):
         self._create_balances_for_date(date.today() - timedelta(days=1))
 
     @api.model
-    def generate_for_period(self, date_from, date_to):
+    def generate_for_year(self, year=None, include_future=False):
         """
-        Fill in every day between the two dates, for every active employee.
+        Fill in the whole year, day by day, for every active employee.
 
-        The cron only ever revisits yesterday, so this is how a period that was
-        never covered - or one whose deductions have since changed - is built.
+        The cron only ever revisits yesterday, so this is how the year is built
+        the first time, and how it is worked out again after something changed.
+        Days that have not happened yet are left out unless asked for: their
+        balance would only repeat today's with nothing deducted from it.
         """
-        if isinstance(date_from, str):
-            date_from = fields.Date.to_date(date_from)
-        if isinstance(date_to, str):
-            date_to = fields.Date.to_date(date_to)
+        today = date.today()
+        year  = int(year or today.year)
 
-        day = date_from
-        while day <= date_to:
+        day  = date(year, 1, 1)
+        last = date(year, 12, 31)
+        if not include_future:
+            last = min(last, today)
+
+        while day <= last:
             self._create_balances_for_date(day)
             day += timedelta(days=1)
+
+    def action_generate_year(self):
+        """Fill in the current year from the Actions menu of the list."""
+        self.env['time.off.balance'].generate_for_year()
+        return {
+            'type': 'ir.actions.client',
+            'tag':  'reload',
+        }
 
     def unlink(self):
         """Deleting a row rebuilds it, the way the daily report does."""
