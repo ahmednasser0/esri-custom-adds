@@ -1,5 +1,8 @@
+import logging
 from datetime import date, timedelta
 from odoo import fields, models, api
+
+_logger = logging.getLogger(__name__)
 
 # Candidate fields for the number the HR team calls the employee id. The first
 # one the installed hr modules actually provide wins; change the order here if
@@ -198,6 +201,35 @@ class TimeOffBalance(models.Model):
         while day <= last:
             self._create_balances_for_date(day)
             day += timedelta(days=1)
+
+    @api.model
+    def _attach_to_reporting_menu(self):
+        """
+        Put the report under the Employees app's own Reporting menu.
+
+        The menu is found by looking for it rather than by its xml id: Odoo has
+        moved and renamed that id between versions, and naming the wrong one
+        stops the whole module loading. The menu is declared under the app root
+        and moved here, so a version without a Reporting menu simply leaves it
+        where it is.
+        """
+        try:
+            menu = self.env.ref('esri.menu_time_off_balance', raise_if_not_found=False)
+            root = self.env.ref('hr.menu_hr_root', raise_if_not_found=False)
+            if not menu or not root:
+                return
+
+            reporting = self.env['ir.ui.menu'].sudo().search([
+                ('parent_id', '=', root.id),
+                ('name', 'ilike', 'Reporting'),
+            ], limit=1)
+            if reporting and menu.parent_id.id != reporting.id:
+                menu.sudo().parent_id = reporting.id
+        except Exception:
+            # Where the menu goes is not worth failing an upgrade over; it
+            # stays where it was declared.
+            _logger.warning("Could not move the Time Off Balance menu under "
+                            "the Employees Reporting menu", exc_info=True)
 
     def action_generate_year(self):
         """Fill in the current year from the Actions menu of the list."""
