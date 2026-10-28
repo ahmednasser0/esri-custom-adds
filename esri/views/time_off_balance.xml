@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <data>
 
     <record id="view_time_off_balance_list" model="ir.ui.view">
         <field name="name">time.off.balance.list</field>
@@ -20,26 +21,16 @@
         <field name="name">time.off.balance.search</field>
         <field name="model">time.off.balance</field>
         <field name="arch" type="xml">
-            <search string="Time Off Balance">
+            <search>
                 <field name="employee_id"/>
                 <field name="employee_code"/>
                 <field name="date"/>
-                <filter name="has_deduction" string="Has Deduction"
-                        domain="[('deduction', '&gt;', 0)]"/>
-                <filter name="no_deduction" string="No Deduction"
-                        domain="[('deduction', '=', 0)]"/>
+                <filter name="filter_has_deduction" string="Has Deduction" domain="[('deduction', '>', 0)]"/>
+                <filter name="filter_no_deduction" string="No Deduction" domain="[('deduction', '=', 0)]"/>
                 <separator/>
-                <filter name="this_month" string="This Month"
-                        domain="[('date', '&gt;=', (context_today() + relativedelta(day=1)).strftime('%Y-%m-%d'))]"/>
-                <separator/>
-                <filter name="negative_balance" string="Balance Exhausted"
-                        domain="[('actual_balance', '&lt;', 0)]"/>
-                <group expand="0" string="Group By">
-                    <filter name="group_employee" string="Employee"
-                            context="{'group_by': 'employee_id'}"/>
-                    <filter name="group_date" string="Date"
-                            context="{'group_by': 'date'}"/>
-                </group>
+                <filter name="filter_exhausted" string="Balance Exhausted" domain="[('actual_balance', '&lt;', 0)]"/>
+                <filter name="group_by_employee" string="Employee" context="{'group_by': 'employee_id'}"/>
+                <filter name="group_by_date" string="Date" context="{'group_by': 'date'}"/>
             </search>
         </field>
     </record>
@@ -85,4 +76,5 @@
         <field name="active">True</field>
     </record>
 
+    </data>
 </odoo>
