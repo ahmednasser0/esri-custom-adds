@@ -71,18 +71,13 @@
         <field name="code">action = env['time.off.balance'].action_generate_year()</field>
     </record>
 
-    <!-- Under the Employees app. If that app already carries a Reporting menu
-         of its own, this one is nested there instead by changing the parent. -->
-    <menuitem id="menu_esri_reporting"
-              name="Reporting"
-              parent="hr.menu_hr_root"
-              sequence="50"/>
-
+    <!-- The Employees app's own Reporting menu. Odoo still carries the old
+         timesheet name for it. -->
     <menuitem id="menu_time_off_balance"
               name="Time Off Balance"
-              parent="menu_esri_reporting"
+              parent="hr.menu_hr_reporting_timesheet"
               action="action_time_off_balance"
-              sequence="10"/>
+              sequence="50"/>
 
     <!-- ─── Cron: create the balance rows ──────────────────────────────── -->
     <record id="ir_cron_time_off_balance" model="ir.cron">
