@@ -203,33 +203,30 @@ class TimeOffBalance(models.Model):
             day += timedelta(days=1)
 
     @api.model
-    def _attach_to_reporting_menu(self):
+    def _attach_to_employees_app(self):
         """
-        Put the report under the Employees app's own Reporting menu.
+        Move the report's menu into the Employees app.
 
-        The menu is found by looking for it rather than by its xml id: Odoo has
-        moved and renamed that id between versions, and naming the wrong one
-        stops the whole module loading. The menu is declared under the app root
-        and moved here, so a version without a Reporting menu simply leaves it
-        where it is.
+        The app is looked up rather than named in the xml: a menu id that has
+        moved between Odoo versions stops the module loading, so the menu is
+        declared on its own and placed here, and anything that goes wrong
+        leaves it where it was instead of failing the upgrade.
         """
         try:
             menu = self.env.ref('esri.menu_time_off_balance', raise_if_not_found=False)
             root = self.env.ref('hr.menu_hr_root', raise_if_not_found=False)
-            if not menu or not root:
-                return
-
-            reporting = self.env['ir.ui.menu'].sudo().search([
-                ('parent_id', '=', root.id),
-                ('name', 'ilike', 'Reporting'),
-            ], limit=1)
-            if reporting and menu.parent_id.id != reporting.id:
-                menu.sudo().parent_id = reporting.id
+            if not root:
+                # Fall back to the app menu by name.
+                root = self.env['ir.ui.menu'].sudo().search([
+                    ('parent_id', '=', False),
+                    ('name', '=', 'Employees'),
+                ], limit=1)
+            if menu and root and menu.parent_id.id != root.id:
+                menu.sudo().parent_id = root.id
         except Exception:
-            # Where the menu goes is not worth failing an upgrade over; it
-            # stays where it was declared.
-            _logger.warning("Could not move the Time Off Balance menu under "
-                            "the Employees Reporting menu", exc_info=True)
+            _logger.warning("Could not move the Time Off Balance menu into the "
+                            "Employees app; it stays where it was declared",
+                            exc_info=True)
 
     def action_generate_year(self):
         """Fill in the current year from the Actions menu of the list."""

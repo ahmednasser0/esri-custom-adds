@@ -71,17 +71,16 @@
         <field name="code">action = env['time.off.balance'].action_generate_year()</field>
     </record>
 
-    <!-- Declared under a menu this module has always loaded against, then moved
-         under the Employees app's Reporting menu by the call below, which finds
-         that menu instead of naming it. A named id is what broke the load
-         twice: Odoo has moved these between versions. -->
+    <!-- Declared without a parent, which always loads, then moved into the
+         Employees app by the call below. Naming an hr menu in the xml is what
+         broke the load twice: Odoo moves those ids between versions, and a
+         missing one stops the whole module. -->
     <menuitem id="menu_time_off_balance"
-              name="Time Off Balance"
-              parent="hr_attendance.menu_hr_attendance_root"
+              name="Time off Balance Report"
               action="action_time_off_balance"
-              sequence="50"/>
+              sequence="90"/>
 
-    <function model="time.off.balance" name="_attach_to_reporting_menu"/>
+    <function model="time.off.balance" name="_attach_to_employees_app"/>
 
     <!-- ─── Cron: create the balance rows ──────────────────────────────── -->
     <record id="ir_cron_time_off_balance" model="ir.cron">
