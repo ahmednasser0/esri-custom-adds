@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_time_off_balance_list" model="ir.ui.view">
+        <field name="name">time.off.balance.list</field>
+        <field name="model">time.off.balance</field>
+        <field name="arch" type="xml">
+            <list string="Time Off Balance" create="false" edit="false">
+                <field name="employee_id"/>
+                <field name="employee_code"/>
+                <field name="date"/>
+                <field name="current_balance" widget="float_time"/>
+                <field name="deduction" widget="float_time" sum="Total Deduction"/>
+                <field name="actual_balance" widget="float_time"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_time_off_balance_search" model="ir.ui.view">
+        <field name="name">time.off.balance.search</field>
+        <field name="model">time.off.balance</field>
+        <field name="arch" type="xml">
+            <search string="Time Off Balance">
+                <field name="employee_id"/>
+                <field name="employee_code"/>
+                <field name="date"/>
+                <filter name="has_deduction" string="Has Deduction"
+                        domain="[('deduction', '&gt;', 0)]"/>
+                <filter name="no_deduction" string="No Deduction"
+                        domain="[('deduction', '=', 0)]"/>
+                <separator/>
+                <filter name="this_month" string="This Month"
+                        domain="[('date', '&gt;=', (context_today() + relativedelta(day=1)).strftime('%Y-%m-%d'))]"/>
+                <separator/>
+                <filter name="negative_balance" string="Balance Exhausted"
+                        domain="[('actual_balance', '&lt;', 0)]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_employee" string="Employee"
+                            context="{'group_by': 'employee_id'}"/>
+                    <filter name="group_date" string="Date"
+                            context="{'group_by': 'date'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_time_off_balance" model="ir.actions.act_window">
+        <field name="name">Time Off Balance</field>
+        <field name="res_model">time.off.balance</field>
+        <field name="view_mode">list</field>
+        <field name="search_view_id" ref="view_time_off_balance_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No balance rows yet</p>
+            <p>
+                A row is written for every employee each day. To fill in a
+                period that was never covered, run
+                <code>generate_for_period</code> on this model.
+            </p>
+        </field>
+    </record>
+
+    <menuitem id="menu_time_off_balance"
+              name="Time Off Balance"
+              parent="attendance_deduction"
+              action="action_time_off_balance"
+              sequence="40"/>
+
+    <!-- ─── Cron: create the balance rows ──────────────────────────────── -->
+    <record id="ir_cron_time_off_balance" model="ir.cron">
+        <field name="name">Time Off Balance Records</field>
+        <field name="model_id" ref="model_time_off_balance"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_create_balances()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">days</field>
+        <field name="active">True</field>
+    </record>
+
+</odoo>

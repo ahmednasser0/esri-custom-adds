@@ -265,10 +265,12 @@ class Deduction(models.Model):
 
         if not existing:
             # create() computes the stored fields on its own.
-            return self.sudo().create({
+            record = self.sudo().create({
                 'employee_id': employee_id,
                 'date':        target_date,
             })
+            self.env['time.off.balance']._ensure_record(employee_id, target_date)
+            return record
 
         if existing.was_posted:
             return existing
@@ -286,6 +288,11 @@ class Deduction(models.Model):
         # must keep their status.
         if abs(previous - (existing.deduction or 0.0)) > HOUR_EPS:
             existing.state = 'draft'
+
+        # The balance row for the day reads this deduction, so it is refreshed
+        # here too - the balance cron only ever revisits yesterday and would
+        # not otherwise catch a deduction that changed today.
+        self.env['time.off.balance']._ensure_record(employee_id, target_date)
 
         return existing
 
