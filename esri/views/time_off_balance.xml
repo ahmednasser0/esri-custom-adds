@@ -17,6 +17,18 @@
         </field>
     </record>
 
+    <record id="view_time_off_balance_pivot" model="ir.ui.view">
+        <field name="name">time.off.balance.pivot</field>
+        <field name="model">time.off.balance</field>
+        <field name="arch" type="xml">
+            <pivot string="Time Off Balance">
+                <field name="employee_id" type="row"/>
+                <field name="date" interval="month" type="col"/>
+                <field name="deduction" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+
     <record id="view_time_off_balance_search" model="ir.ui.view">
         <field name="name">time.off.balance.search</field>
         <field name="model">time.off.balance</field>
@@ -38,7 +50,7 @@
     <record id="action_time_off_balance" model="ir.actions.act_window">
         <field name="name">Time Off Balance</field>
         <field name="res_model">time.off.balance</field>
-        <field name="view_mode">list</field>
+        <field name="view_mode">list,pivot</field>
         <field name="search_view_id" ref="view_time_off_balance_search"/>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">No balance rows yet</p>
@@ -59,11 +71,16 @@
         <field name="code">action = env['time.off.balance'].action_generate_year()</field>
     </record>
 
+    <menuitem id="menu_esri_reporting"
+              name="Reporting"
+              parent="hr_attendance.menu_hr_attendance_root"
+              sequence="20"/>
+
     <menuitem id="menu_time_off_balance"
               name="Time Off Balance"
-              parent="attendance_deduction"
+              parent="menu_esri_reporting"
               action="action_time_off_balance"
-              sequence="40"/>
+              sequence="10"/>
 
     <!-- ─── Cron: create the balance rows ──────────────────────────────── -->
     <record id="ir_cron_time_off_balance" model="ir.cron">
