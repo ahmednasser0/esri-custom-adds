@@ -148,7 +148,17 @@ class TimeOffBalance(models.Model):
 
             rec.current_balance = current
             rec.deduction       = deduction
-            rec.actual_balance  = current - deduction
+
+            # A balance that is already spent has nothing left to take the
+            # deduction from, so the sum is not done at all and the balance is
+            # reported as it stands. Where there is a balance but less of it
+            # than the deduction, what is left goes and the balance stops at
+            # zero: the hours the balance could not cover are a matter for the
+            # payroll, not something to show here as a negative balance.
+            if current <= 0.0:
+                rec.actual_balance = current
+            else:
+                rec.actual_balance = max(current - deduction, 0.0)
 
     # ─── Daily record creation ───────────────────────────────────────────────
 
