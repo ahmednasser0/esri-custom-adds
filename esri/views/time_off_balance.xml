@@ -71,10 +71,12 @@
         <field name="code">action = env['time.off.balance'].action_generate_year()</field>
     </record>
 
+    <!-- Under the Employees app. If that app already carries a Reporting menu
+         of its own, this one is nested there instead by changing the parent. -->
     <menuitem id="menu_esri_reporting"
               name="Reporting"
-              parent="hr_attendance.menu_hr_attendance_root"
-              sequence="20"/>
+              parent="hr.menu_hr_root"
+              sequence="50"/>
 
     <menuitem id="menu_time_off_balance"
               name="Time Off Balance"

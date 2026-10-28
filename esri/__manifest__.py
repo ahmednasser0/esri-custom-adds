@@ -14,7 +14,7 @@ Management Attendance and Human Resources
     'version': '0.1',
 
     # any module necessary for this one to work correctly
-    'depends': ['base', 'mail', 'hr_attendance', 'hr_holidays', 'hr_holidays_attendance', 'hr_work_entry'],
+    'depends': ['base', 'mail', 'hr', 'hr_attendance', 'hr_holidays', 'hr_holidays_attendance', 'hr_work_entry'],
 
     # always loaded
     'data': [
