@@ -1,7 +1,10 @@
+import logging
 from datetime import date, timedelta
 from odoo import fields, models, api
 from odoo.exceptions import UserError
 from .models import HOUR_EPS, classify_day, employee_tz, local_hour
+
+_logger = logging.getLogger(__name__)
 WEEKDAYS   = {'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Sunday'}
 
 LATE_GRACE_MINUTES  = 15   # gap <= this many minutes -> quarter day (free once/month)
@@ -269,8 +272,7 @@ class Deduction(models.Model):
                 'employee_id': employee_id,
                 'date':        target_date,
             })
-            self.env['time.off.balance']._ensure_record(employee_id, target_date)
-            self.env['attendance.report']._ensure_record(employee_id, target_date)
+            self._sync_report_rows(employee_id, target_date)
             return record
 
         if existing.was_posted:
@@ -294,10 +296,34 @@ class Deduction(models.Model):
         # too - their crons only ever revisit yesterday and would not otherwise
         # catch a day whose deduction has just been worked out again, whether
         # that day is today or one long past.
-        self.env['time.off.balance']._ensure_record(employee_id, target_date)
-        self.env['attendance.report']._ensure_record(employee_id, target_date)
+        self._sync_report_rows(employee_id, target_date)
 
         return existing
+
+    @api.model
+    def _sync_report_rows(self, employee_id, target_date):
+        """
+        Refresh the day's report rows.
+
+        A report is a view of the day, never the day itself. This runs inside
+        whatever saved the attendance, approved the leave or computed the
+        payslip, so a report that cannot be written must not bring that down
+        with it: each one goes in its own savepoint and a failure is logged and
+        left there. The row stays stale; the day's real work goes through.
+        """
+        for model in ('time.off.balance', 'attendance.report'):
+            try:
+                # The savepoint matters: a failed query aborts the whole
+                # transaction, so catching the error without rolling back to
+                # here would only move the failure to the next statement.
+                with self.env.cr.savepoint():
+                    self.env[model]._ensure_record(employee_id, target_date)
+            except Exception:
+                _logger.warning(
+                    "Could not refresh %s for employee %s on %s; the row is "
+                    "left as it was", model, employee_id, target_date,
+                    exc_info=True,
+                )
 
     @api.model
     def _create_deductions_for_date(self, target_date):
