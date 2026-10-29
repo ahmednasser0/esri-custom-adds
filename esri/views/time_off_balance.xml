@@ -78,26 +78,12 @@
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">No balance rows yet</p>
             <p>
-                A row is written for every employee each day. To build the year,
-                pick <b>Generate This Year</b> from the Actions menu.
+                A row is written for every employee each day, and worked out
+                again whenever that day's attendance or deduction changes.
             </p>
         </field>
     </record>
 
-    <!-- ─── Build the year from the Actions menu ───────────────────────── -->
-    <record id="action_generate_time_off_balance_year" model="ir.actions.server">
-        <field name="name">Generate This Year</field>
-        <field name="model_id" ref="model_time_off_balance"/>
-        <field name="binding_model_id" ref="model_time_off_balance"/>
-        <field name="binding_view_types">list</field>
-        <field name="state">code</field>
-        <field name="code">action = env['time.off.balance'].action_generate_year()</field>
-    </record>
-
-    <!-- Declared without a parent, which always loads, then moved into the
-         Employees app by the call below. Naming an hr menu in the xml is what
-         broke the load twice: Odoo moves those ids between versions, and a
-         missing one stops the whole module. -->
     <menuitem id="menu_time_off_balance"
               name="Time off Balance Report"
               action="action_time_off_balance"

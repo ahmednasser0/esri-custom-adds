@@ -4,10 +4,6 @@ from odoo import fields, models, api
 
 _logger = logging.getLogger(__name__)
 
-# Candidate fields for the number the HR team calls the employee id. The first
-# one the installed hr modules actually provide wins; change the order here if
-# this database keeps it somewhere else.
-EMPLOYEE_CODE_FIELDS = ('registration_number', 'identification_id', 'barcode')
 
 
 class TimeOffBalance(models.Model):
@@ -21,9 +17,10 @@ class TimeOffBalance(models.Model):
     )
     employee_code = fields.Char(
         string='Employee ID',
-        compute='_compute_employee_code',
+        related='employee_id.barcode',
         store=True,
-        help="The employee's own identifier as it appears on the employee form",
+        readonly=True,
+        help="The employee's badge id, taken from the Barcode field on the employee",
     )
     date = fields.Date(string='Date', required=True)
 
@@ -121,18 +118,6 @@ class TimeOffBalance(models.Model):
 
     # ─── Compute ─────────────────────────────────────────────────────────────
 
-    @api.depends('employee_id')
-    def _compute_employee_code(self):
-        for rec in self:
-            code = False
-            for fname in EMPLOYEE_CODE_FIELDS:
-                if fname in rec.employee_id._fields:
-                    value = rec.employee_id[fname]
-                    if value:
-                        code = value
-                        break
-            rec.employee_code = code
-
     @api.depends('employee_id', 'date')
     def _compute_balance(self):
         leave_type = self._annual_leave_type()
@@ -176,7 +161,6 @@ class TimeOffBalance(models.Model):
                 'date':        target_date,
             })
 
-        existing._compute_employee_code()
         existing._compute_balance()
         return existing
 
@@ -189,28 +173,6 @@ class TimeOffBalance(models.Model):
     @api.model
     def _cron_create_balances(self):
         self._create_balances_for_date(date.today() - timedelta(days=1))
-
-    @api.model
-    def generate_for_year(self, year=None, include_future=False):
-        """
-        Fill in the whole year, day by day, for every active employee.
-
-        The cron only ever revisits yesterday, so this is how the year is built
-        the first time, and how it is worked out again after something changed.
-        Days that have not happened yet are left out unless asked for: their
-        balance would only repeat today's with nothing deducted from it.
-        """
-        today = date.today()
-        year  = int(year or today.year)
-
-        day  = date(year, 1, 1)
-        last = date(year, 12, 31)
-        if not include_future:
-            last = min(last, today)
-
-        while day <= last:
-            self._create_balances_for_date(day)
-            day += timedelta(days=1)
 
     @api.model
     def _attach_to_employees_app(self):
@@ -237,14 +199,6 @@ class TimeOffBalance(models.Model):
             _logger.warning("Could not move the Time Off Balance menu into the "
                             "Employees app; it stays where it was declared",
                             exc_info=True)
-
-    def action_generate_year(self):
-        """Fill in the current year from the Actions menu of the list."""
-        self.env['time.off.balance'].generate_for_year()
-        return {
-            'type': 'ir.actions.client',
-            'tag':  'reload',
-        }
 
     def unlink(self):
         """Deleting a row rebuilds it, the way the daily report does."""
