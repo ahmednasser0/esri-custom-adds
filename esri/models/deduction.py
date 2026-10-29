@@ -270,6 +270,7 @@ class Deduction(models.Model):
                 'date':        target_date,
             })
             self.env['time.off.balance']._ensure_record(employee_id, target_date)
+            self.env['attendance.report']._ensure_record(employee_id, target_date)
             return record
 
         if existing.was_posted:
@@ -289,10 +290,12 @@ class Deduction(models.Model):
         if abs(previous - (existing.deduction or 0.0)) > HOUR_EPS:
             existing.state = 'draft'
 
-        # The balance row for the day reads this deduction, so it is refreshed
-        # here too - the balance cron only ever revisits yesterday and would
-        # not otherwise catch a deduction that changed today.
+        # The day's report rows read this deduction, so they are refreshed here
+        # too - their crons only ever revisit yesterday and would not otherwise
+        # catch a day whose deduction has just been worked out again, whether
+        # that day is today or one long past.
         self.env['time.off.balance']._ensure_record(employee_id, target_date)
+        self.env['attendance.report']._ensure_record(employee_id, target_date)
 
         return existing
 

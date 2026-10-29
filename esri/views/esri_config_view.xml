@@ -27,8 +27,9 @@
                             <field name="deduction_full_rate"/>
                             <field name="absence_deduction_rate"/>
                         </group>
-                        <group string="Time Off Balance">
+                        <group string="Reports">
                             <field name="annual_leave_type_id" options="{'no_create': True}"/>
+                            <field name="monthly_permission_type_id" options="{'no_create': True}"/>
                         </group>
                     </sheet>
                 </form>

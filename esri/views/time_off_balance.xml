@@ -84,10 +84,19 @@
         </field>
     </record>
 
-    <menuitem id="menu_time_off_balance"
-              name="Time off Balance Report"
-              action="action_time_off_balance"
+    <!-- The parent both reports hang off. Declared without a parent of its
+         own, which always loads, then moved into the Employees app by the call
+         below: naming an hr menu in the xml broke the load twice, because Odoo
+         moves those ids between versions. -->
+    <menuitem id="menu_esri_attendance_reports"
+              name="Attendance Report"
               sequence="90"/>
+
+    <menuitem id="menu_time_off_balance"
+              name="Time Off Balance"
+              parent="menu_esri_attendance_reports"
+              action="action_time_off_balance"
+              sequence="20"/>
 
     <function model="time.off.balance" name="_attach_to_employees_app"/>
 

@@ -177,7 +177,7 @@ class TimeOffBalance(models.Model):
     @api.model
     def _attach_to_employees_app(self):
         """
-        Move the report's menu into the Employees app.
+        Move the reports' parent menu into the Employees app.
 
         The app is looked up rather than named in the xml: a menu id that has
         moved between Odoo versions stops the module loading, so the menu is
@@ -185,7 +185,7 @@ class TimeOffBalance(models.Model):
         leaves it where it was instead of failing the upgrade.
         """
         try:
-            menu = self.env.ref('esri.menu_time_off_balance', raise_if_not_found=False)
+            menu = self.env.ref('esri.menu_esri_attendance_reports', raise_if_not_found=False)
             root = self.env.ref('hr.menu_hr_root', raise_if_not_found=False)
             if not root:
                 # Fall back to the app menu by name.

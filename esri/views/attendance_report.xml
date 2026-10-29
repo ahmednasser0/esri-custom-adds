@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+    <record id="view_attendance_report_list" model="ir.ui.view">
+        <field name="name">attendance.report.list</field>
+        <field name="model">attendance.report</field>
+        <field name="arch" type="xml">
+            <list string="Attendance" create="false" edit="false">
+                <field name="employee_id"/>
+                <field name="date"/>
+                <field name="department_id"/>
+                <field name="check_in" widget="float_time"/>
+                <field name="check_out" widget="float_time"/>
+                <field name="leave_type_id"/>
+                <field name="start_from" widget="float_time"/>
+                <field name="end_to" widget="float_time"/>
+                <field name="actual_worked_hours" widget="float_time" sum="Total Worked"/>
+                <field name="daily_check" widget="float_time"/>
+                <field name="deduction" widget="float_time" sum="Total Deduction"/>
+                <field name="monthly_permission" widget="float_time"/>
+                <field name="comment"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_attendance_report_form" model="ir.ui.view">
+        <field name="name">attendance.report.form</field>
+        <field name="model">attendance.report</field>
+        <field name="arch" type="xml">
+            <form string="Attendance" create="false" edit="false">
+                <sheet>
+                    <group>
+                        <group string="Employee">
+                            <field name="employee_id"/>
+                            <field name="department_id"/>
+                            <field name="date"/>
+                            <field name="comment"/>
+                        </group>
+                        <group string="Attendance">
+                            <field name="check_in" widget="float_time"/>
+                            <field name="check_out" widget="float_time"/>
+                            <field name="actual_worked_hours" widget="float_time"/>
+                        </group>
+                        <group string="Time Off">
+                            <field name="leave_type_id"/>
+                            <field name="start_from" widget="float_time"/>
+                            <field name="end_to" widget="float_time"/>
+                            <field name="monthly_permission" widget="float_time"/>
+                        </group>
+                        <group string="Deduction">
+                            <field name="daily_check" widget="float_time"/>
+                            <field name="deduction" widget="float_time"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_attendance_report_search" model="ir.ui.view">
+        <field name="name">attendance.report.search</field>
+        <field name="model">attendance.report</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="employee_id"/>
+                <field name="date"/>
+                <field name="department_id"/>
+                <field name="leave_type_id"/>
+                <filter name="filter_working_day" string="Working Day" domain="[('comment', '=', 'working_day')]"/>
+                <filter name="filter_weekend" string="Weekend" domain="[('comment', '=', 'weekend')]"/>
+                <filter name="filter_public_holiday" string="Public Holiday" domain="[('comment', '=', 'public_holiday')]"/>
+                <separator/>
+                <filter name="filter_has_deduction" string="Has Deduction" domain="[('deduction', '>', 0)]"/>
+                <filter name="filter_on_leave" string="On Leave" domain="[('leave_type_id', '!=', False)]"/>
+                <filter name="group_by_employee" string="Employee" context="{'group_by': 'employee_id'}"/>
+                <filter name="group_by_department" string="Department" context="{'group_by': 'department_id'}"/>
+                <filter name="group_by_date" string="Date" context="{'group_by': 'date'}"/>
+                <filter name="group_by_comment" string="Day Type" context="{'group_by': 'comment'}"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="view_attendance_report_pivot" model="ir.ui.view">
+        <field name="name">attendance.report.pivot</field>
+        <field name="model">attendance.report</field>
+        <field name="arch" type="xml">
+            <pivot string="Attendance">
+                <field name="employee_id" type="row"/>
+                <field name="date" interval="month" type="col"/>
+                <field name="actual_worked_hours" type="measure"/>
+                <field name="deduction" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+
+    <record id="action_attendance_report" model="ir.actions.act_window">
+        <field name="name">Attendance</field>
+        <field name="res_model">attendance.report</field>
+        <field name="view_mode">list,form,pivot</field>
+        <field name="search_view_id" ref="view_attendance_report_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No attendance rows yet</p>
+            <p>
+                A row is written for every employee each day, and worked out
+                again whenever that day's attendance, time off or deduction
+                changes.
+            </p>
+        </field>
+    </record>
+
+    <menuitem id="menu_attendance_report"
+              name="Attendance"
+              parent="menu_esri_attendance_reports"
+              action="action_attendance_report"
+              sequence="10"/>
+
+    <!-- ─── Cron: create the attendance report rows ────────────────────── -->
+    <record id="ir_cron_attendance_report" model="ir.cron">
+        <field name="name">Attendance Report Records</field>
+        <field name="model_id" ref="model_attendance_report"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_create_reports()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">days</field>
+        <field name="active">True</field>
+    </record>
+
+    </data>
+</odoo>
