@@ -8,6 +8,7 @@
         <field name="arch" type="xml">
             <list string="Attendance" create="false" edit="false">
                 <field name="employee_id"/>
+                <field name="employee_code"/>
                 <field name="date"/>
                 <field name="department_id"/>
                 <field name="check_in" widget="float_time"/>
@@ -33,6 +34,7 @@
                     <group>
                         <group string="Employee">
                             <field name="employee_id"/>
+                            <field name="employee_code"/>
                             <field name="department_id"/>
                             <field name="date"/>
                             <field name="comment"/>
@@ -64,6 +66,7 @@
         <field name="arch" type="xml">
             <search>
                 <field name="employee_id"/>
+                <field name="employee_code"/>
                 <field name="date"/>
                 <field name="department_id"/>
                 <field name="leave_type_id"/>

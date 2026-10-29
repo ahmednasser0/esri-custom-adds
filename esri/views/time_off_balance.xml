@@ -99,6 +99,7 @@
               sequence="20"/>
 
     <function model="time.off.balance" name="_attach_to_employees_app"/>
+    <function model="time.off.balance" name="_refresh_employee_codes"/>
 
     <!-- ─── Cron: create the balance rows ──────────────────────────────── -->
     <record id="ir_cron_time_off_balance" model="ir.cron">

@@ -175,6 +175,25 @@ class TimeOffBalance(models.Model):
         self._create_balances_for_date(date.today() - timedelta(days=1))
 
     @api.model
+    def _refresh_employee_codes(self):
+        """
+        Work the Employee ID out again on every row.
+
+        The column used to be filled by a compute that went looking through
+        several identifier fields; it now simply follows the employee's
+        barcode. A stored column keeps whatever it was last given, so rows
+        written under the old rule would otherwise keep showing it.
+        """
+        try:
+            rows = self.sudo().search([])
+            if rows:
+                self.env.add_to_compute(self._fields['employee_code'], rows)
+                rows.flush_recordset()
+        except Exception:
+            _logger.warning("Could not refresh the Employee ID column",
+                            exc_info=True)
+
+    @api.model
     def _attach_to_employees_app(self):
         """
         Move the reports' parent menu into the Employees app.

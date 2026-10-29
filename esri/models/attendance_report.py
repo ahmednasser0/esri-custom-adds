@@ -12,6 +12,13 @@ class AttendanceReport(models.Model):
     employee_id = fields.Many2one(
         'hr.employee', string='Employee', required=True, ondelete='cascade',
     )
+    employee_code = fields.Char(
+        string='Employee ID',
+        related='employee_id.barcode',
+        store=True,
+        readonly=True,
+        help="The employee's badge id, taken from the Barcode field on the employee",
+    )
     date = fields.Date(string='Date', required=True)
     department_id = fields.Many2one(
         'hr.department',
