@@ -457,16 +457,15 @@ class Overtime(models.Model):
         ]))
 
     @api.model
-    def _get_actual_worked_hours_for(self, employee, target_date):
+    def _day_worked_totals(self, employee, target_date):
         """
-        Actual worked hours, same formula as the daily report:
-        (worked hours + approved time off) minus the time beyond the
-        overtime cutoff, capped at the configured max worked hours.
-        """
-        cfg       = self.env['esri.config'].get_config()
-        ot_cutoff = cfg.overtime_cutoff or 19.0
-        max_wh    = cfg.max_worked_hours or 12.0
+        (total, last_out) for the day, on the employee's own clock.
 
+        total is the worked hours plus the approved time off, before the
+        cutoff is taken off it and before the cap: the daily report's Total
+        Worked Hours. last_out is the latest the employee was out, counting
+        the end of an hour-based leave.
+        """
         cal      = employee.resource_calendar_id
         first_ci = cal.first_check_in if cal and cal.first_check_in else 7.0
         tz       = employee_tz(employee)
@@ -498,7 +497,26 @@ class Overtime(models.Model):
                     hour_to = 0.0
                 last_out = max(last_out, hour_to)
 
-        total = worked + time_off
+        return worked + time_off, last_out
+
+    @api.model
+    def _get_total_worked_hours_for(self, employee, target_date):
+        """Worked hours plus approved time off, before the cutoff and the cap."""
+        total, _last_out = self._day_worked_totals(employee, target_date)
+        return total
+
+    @api.model
+    def _get_actual_worked_hours_for(self, employee, target_date):
+        """
+        Actual worked hours, same formula as the daily report:
+        (worked hours + approved time off) minus the time beyond the
+        overtime cutoff, capped at the configured max worked hours.
+        """
+        cfg       = self.env['esri.config'].get_config()
+        ot_cutoff = cfg.overtime_cutoff or 19.0
+        max_wh    = cfg.max_worked_hours or 12.0
+
+        total, last_out = self._day_worked_totals(employee, target_date)
         minus = max(last_out - ot_cutoff, 0.0)
         return min(max(total - minus, 0.0), max_wh)
 

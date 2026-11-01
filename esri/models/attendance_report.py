@@ -58,10 +58,10 @@ class AttendanceReport(models.Model):
         compute='_compute_values', store=True,
         help="The hour the approved time off ends",
     )
-    actual_worked_hours = fields.Float(
-        string='Actual Worked Hours',
+    total_worked_hours = fields.Float(
+        string='Total Worked Hours',
         compute='_compute_values', store=True,
-        help="Worked hours plus approved time off, past the cutoff taken off and capped, as the Daily Report counts them",
+        help="Worked hours plus approved time off for the day, before the overtime cutoff is taken off and before the cap",
     )
     daily_check = fields.Float(
         string='Daily Check',
@@ -173,7 +173,7 @@ class AttendanceReport(models.Model):
                 rec.check_in = rec.check_out = 0.0
                 rec.leave_type_id = False
                 rec.start_from = rec.end_to = 0.0
-                rec.actual_worked_hours = 0.0
+                rec.total_worked_hours = 0.0
                 rec.daily_check = rec.deduction = 0.0
                 rec.monthly_permission = 0.0
                 rec.comment = False
@@ -188,7 +188,7 @@ class AttendanceReport(models.Model):
             rec.start_from    = hour_from
             rec.end_to        = hour_to
 
-            rec.actual_worked_hours = Overtime._get_actual_worked_hours_for(employee, day)
+            rec.total_worked_hours = Overtime._get_total_worked_hours_for(employee, day)
             rec.daily_check, rec.deduction = self._deduction_figures(employee, day)
             rec.monthly_permission = Balance._balance_hours(employee, permission_type, day)
             rec.comment = self._day_kind(employee, day)

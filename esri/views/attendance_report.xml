@@ -16,7 +16,7 @@
                 <field name="leave_type_id"/>
                 <field name="start_from" widget="float_time"/>
                 <field name="end_to" widget="float_time"/>
-                <field name="actual_worked_hours" widget="float_time" sum="Total Worked"/>
+                <field name="total_worked_hours" widget="float_time" sum="Total Worked"/>
                 <field name="daily_check" widget="float_time"/>
                 <field name="deduction" widget="float_time" sum="Total Deduction"/>
                 <field name="monthly_permission" widget="float_time"/>
@@ -42,7 +42,7 @@
                         <group string="Attendance">
                             <field name="check_in" widget="float_time"/>
                             <field name="check_out" widget="float_time"/>
-                            <field name="actual_worked_hours" widget="float_time"/>
+                            <field name="total_worked_hours" widget="float_time"/>
                         </group>
                         <group string="Time Off">
                             <field name="leave_type_id"/>
@@ -91,7 +91,7 @@
             <pivot string="Attendance">
                 <field name="employee_id" type="row"/>
                 <field name="date" interval="month" type="col"/>
-                <field name="actual_worked_hours" type="measure"/>
+                <field name="total_worked_hours" type="measure"/>
                 <field name="deduction" type="measure"/>
             </pivot>
         </field>
