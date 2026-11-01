@@ -149,6 +149,22 @@ class AttendanceReport(models.Model):
         return 'working_day'
 
     @api.model
+    def _total_worked_hours(self, employee, target_date):
+        """
+        The day's Total Worked Hours, read straight off the daily report.
+
+        Not worked out again here: the daily report treats a weekend as worth
+        only what an Overtime Request approved, ignoring the attendance and
+        the time off, and a second copy of that rule would drift from it. The
+        row is refreshed first because this can run before the daily report's
+        own sync has reached that day.
+        """
+        record = self.env['daily.report'].sudo()._ensure_record(employee.id, target_date)
+        if not record:
+            return 0.0
+        return record.total_worked_hours or 0.0
+
+    @api.model
     def _deduction_figures(self, employee, target_date):
         """(daily_check, deduction) from the day's deduction record."""
         record = self.env['deduction'].sudo().search([
@@ -166,7 +182,6 @@ class AttendanceReport(models.Model):
         cfg             = self.env['esri.config'].sudo().get_config()
         permission_type = cfg.monthly_permission_type_id
         Balance         = self.env['time.off.balance']
-        Overtime        = self.env['hr.overtime']
 
         for rec in self:
             if not rec.employee_id or not rec.date:
@@ -188,7 +203,7 @@ class AttendanceReport(models.Model):
             rec.start_from    = hour_from
             rec.end_to        = hour_to
 
-            rec.total_worked_hours = Overtime._get_total_worked_hours_for(employee, day)
+            rec.total_worked_hours = self._total_worked_hours(employee, day)
             rec.daily_check, rec.deduction = self._deduction_figures(employee, day)
             rec.monthly_permission = Balance._balance_hours(employee, permission_type, day)
             rec.comment = self._day_kind(employee, day)
