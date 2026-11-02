@@ -58,10 +58,10 @@ class AttendanceReport(models.Model):
         compute='_compute_values', store=True,
         help="The hour the approved time off ends",
     )
-    total_worked_hours = fields.Float(
-        string='Total Worked Hours',
+    worked_hours = fields.Float(
+        string='Worked Hours',
         compute='_compute_values', store=True,
-        help="Worked hours plus approved time off for the day, before the overtime cutoff is taken off and before the cap",
+        help="The day's worked hours as the Attendances app records them: check-in to check-out, with nothing clipped, capped, or added for time off",
     )
     daily_check = fields.Float(
         string='Daily Check',
@@ -149,20 +149,20 @@ class AttendanceReport(models.Model):
         return 'working_day'
 
     @api.model
-    def _total_worked_hours(self, employee, target_date):
+    def _worked_hours(self, employee, target_date):
         """
-        The day's Total Worked Hours, read straight off the daily report.
+        The day's worked hours straight from the Attendances app.
 
-        Not worked out again here: the daily report treats a weekend as worth
-        only what an Overtime Request approved, ignoring the attendance and
-        the time off, and a second copy of that rule would drift from it. The
-        row is refreshed first because this can run before the daily report's
-        own sync has reached that day.
+        Every attendance on the day added up as Odoo itself measures each one,
+        check-in to check-out. Nothing of this module's own reading of the day
+        comes into it: no clipping at the first check-in, no cutoff, no cap,
+        and no approved time off.
         """
-        record = self.env['daily.report'].sudo()._ensure_record(employee.id, target_date)
-        if not record:
-            return 0.0
-        return record.total_worked_hours or 0.0
+        atts = self.env['hr.attendance'].sudo().search([
+            ('employee_id',     '=', employee.id),
+            ('attendance_date', '=', target_date),
+        ])
+        return sum(atts.mapped('worked_hours'))
 
     @api.model
     def _deduction_figures(self, employee, target_date):
@@ -188,7 +188,7 @@ class AttendanceReport(models.Model):
                 rec.check_in = rec.check_out = 0.0
                 rec.leave_type_id = False
                 rec.start_from = rec.end_to = 0.0
-                rec.total_worked_hours = 0.0
+                rec.worked_hours = 0.0
                 rec.daily_check = rec.deduction = 0.0
                 rec.monthly_permission = 0.0
                 rec.comment = False
@@ -203,7 +203,7 @@ class AttendanceReport(models.Model):
             rec.start_from    = hour_from
             rec.end_to        = hour_to
 
-            rec.total_worked_hours = self._total_worked_hours(employee, day)
+            rec.worked_hours = self._worked_hours(employee, day)
             rec.daily_check, rec.deduction = self._deduction_figures(employee, day)
             rec.monthly_permission = Balance._balance_hours(employee, permission_type, day)
             rec.comment = self._day_kind(employee, day)
