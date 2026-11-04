@@ -89,10 +89,10 @@ class AttendanceReport(models.Model):
         help="What kind of day this is",
     )
 
-    _sql_constraints = [
-        ('unique_employee_date_attendance_report', 'UNIQUE(employee_id, date)',
-         'An attendance report already exists for this employee on this date.'),
-    ]
+    _unique_employee_date_attendance_report = models.Constraint(
+        'UNIQUE(employee_id, date)',
+        'An attendance report already exists for this employee on this date.',
+    )
 
     # ─── Helpers ─────────────────────────────────────────────────────────────
 

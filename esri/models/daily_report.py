@@ -49,10 +49,10 @@ class DailyReport(models.Model):
         help="The actual number of working hours to be considered for calculation",
     )
 
-    _sql_constraints = [
-        ('unique_employee_date_daily_report', 'UNIQUE(employee_id, date)',
-         'A daily report already exists for this employee on this date.'),
-    ]
+    _unique_employee_date_daily_report = models.Constraint(
+        'UNIQUE(employee_id, date)',
+        'A daily report already exists for this employee on this date.',
+    )
 
     # ─── Helpers ─────────────────────────────────────────────────────────────
 

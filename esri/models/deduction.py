@@ -245,10 +245,10 @@ class Deduction(models.Model):
 
     # ─── Daily record creation ───────────────────────────────────────────────
 
-    _sql_constraints = [
-        ('unique_employee_date_deduction', 'UNIQUE(employee_id, date)',
-         'A deduction record already exists for this employee on this date.'),
-    ]
+    _unique_employee_date_deduction = models.Constraint(
+        'UNIQUE(employee_id, date)',
+        'A deduction record already exists for this employee on this date.',
+    )
 
     @api.model
     def _ensure_record(self, employee_id, target_date):

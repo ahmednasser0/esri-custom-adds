@@ -625,10 +625,10 @@ class Overtime(models.Model):
             rec.worked_overtime = self._overtime_hours_for(
                 rec.employee_id, rec.date, day_kind)
 
-    _sql_constraints = [
-        ('unique_employee_date', 'UNIQUE(employee_id, date)',
-         'An overtime record already exists for this employee on this date.'),
-    ]
+    _unique_employee_date = models.Constraint(
+        'UNIQUE(employee_id, date)',
+        'An overtime record already exists for this employee on this date.',
+    )
 
     # ─── Block manual create / write / unlink ────────────────────────────────
 

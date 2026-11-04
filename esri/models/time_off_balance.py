@@ -46,10 +46,10 @@ class TimeOffBalance(models.Model):
         help="Current Balance minus Deduction, in hours",
     )
 
-    _sql_constraints = [
-        ('unique_employee_date_balance', 'UNIQUE(employee_id, date)',
-         'A time off balance already exists for this employee on this date.'),
-    ]
+    _unique_employee_date_balance = models.Constraint(
+        'UNIQUE(employee_id, date)',
+        'A time off balance already exists for this employee on this date.',
+    )
 
     # ─── Helpers ─────────────────────────────────────────────────────────────
 
