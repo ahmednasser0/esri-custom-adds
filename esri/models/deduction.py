@@ -42,18 +42,9 @@ class Deduction(models.Model):
         help="Work Entries generated for Payroll.",
     )
 
-    was_posted = fields.Boolean(
-        string='Was Posted',
-        readonly=True,
-        copy=False,
-        help="Once marked as Posted, the record remains permanently Posted, and its values are frozen. It cannot be reverted to Draft, even after being moved to Warning or Archived. Deletion is the only way to remove the record.",
-    )
-
     state = fields.Selection(
         [
             ('draft',    'Draft'),
-            ('posted',   'Posted'),
-            ('warning',  'Warning'),
             ('archived', 'Archived'),
         ],
         string='Status',
@@ -256,10 +247,8 @@ class Deduction(models.Model):
         Create the (employee, date) record if it does not exist yet, refresh its
         stored checks, and send it back to Draft when the deduction changed.
 
-        A record that has been posted is frozen and skipped entirely. It is
-        skipped here rather than left to hit the lock in write(), because this
-        runs inside the attendance / leave / holiday sync: raising would abort
-        the user's save over an unrelated record they are not even editing.
+        Nothing is frozen: a record is worked out again whenever the day it
+        covers changes, however old that day is.
         """
         existing = self.sudo().search([
             ('employee_id', '=', employee_id),
@@ -274,9 +263,6 @@ class Deduction(models.Model):
             })
             self._sync_report_rows(employee_id, target_date)
             return record
-
-        if existing.was_posted:
-            return existing
 
         # Read the stored value first, then recompute over it. Calling the
         # compute directly is what refreshes a stored computed field whose real
@@ -335,40 +321,13 @@ class Deduction(models.Model):
     def _cron_create_daily_deductions(self):
         self._create_deductions_for_date(date.today() - timedelta(days=1))
 
-    # ─── Posted records are locked ────────────────────────────────────────────
-
-    def write(self, vals):
-        # Posting is final, and was_posted is what records that - not the
-        # current state. Going through Warning or Archived would otherwise be a
-        # way back to Draft, since both of those can be reset.
-        #
-        # So once a record has been posted its values are frozen (the sync skips
-        # it in _ensure_record) and it can never be Draft again. Deleting it is
-        # the only way to undo a post, and unlink() below clears the whole day
-        # with it so nothing rebuilds the record afterwards.
-        if set(vals) - {'state'} or vals.get('state') == 'draft':
-            locked = self.filtered(lambda rec: rec.was_posted)
-            if locked:
-                raise UserError(
-                    "السجل اتعمله Post وبقى نهائى: مش ممكن تعديله ولا ترجيعه Draft. "
-                    "لو محتاج تلغيه، امسح السجل — وده هيمسح معاه الـ attendance "
-                    "والـ overtime والـ daily report بتاع نفس اليوم."
-                )
-
-        if vals.get('state') == 'posted':
-            vals = dict(vals, was_posted=True)
-
-        return super().write(vals)
-
     def unlink(self):
         """
         Deleting a deduction recalculates it rather than destroying the day.
 
         The attendance stays where it is. The record is dropped and rebuilt from
         whatever the attendance and the Working Schedule say now, so deleting it
-        is how you force a stale figure to be worked out again - and, since a
-        posted record is frozen and cannot return to Draft, it is also how a
-        post is undone: what comes back is a fresh Draft.
+        is how a stale figure is forced to be worked out again.
         """
         days = {
             (rec.employee_id.id, rec.date)
@@ -382,13 +341,22 @@ class Deduction(models.Model):
             self._ensure_record(employee_id, day)
         return res
 
+    @api.model
+    def _migrate_dropped_states(self):
+        """
+        Bring back any record left on a status that no longer exists.
+
+        Posted and Warning are gone. A row still carrying one of them would
+        show an empty status and refuse to save, so it returns to Draft. Plain
+        SQL because the ORM will not write a value the selection no longer has,
+        nor read one back without complaining.
+        """
+        self.env.cr.execute(
+            "UPDATE deduction SET state = 'draft' "
+            "WHERE state IS NULL OR state NOT IN ('draft', 'archived')"
+        )
+
     # ─── Status bar transitions ───────────────────────────────────────────────
-
-    def action_post(self):
-        self.write({'state': 'posted'})
-
-    def action_warning(self):
-        self.write({'state': 'warning'})
 
     def action_set_to_draft(self):
         self.write({'state': 'draft'})

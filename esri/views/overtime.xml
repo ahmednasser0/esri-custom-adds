@@ -8,13 +8,11 @@
             <field name="arch" type="xml">
                 <form string="Overtime" edit="false" create="false" delete="false">
                     <header>
-                        <button name="action_post" string="Post" type="object"
-                                class="oe_highlight" invisible="state != 'draft'"/>
                         <button name="action_set_to_draft" string="Reset to Draft" type="object"
                                 invisible="state != 'archived'"/>
                         <button name="action_archive_record" string="Archive" type="object"
                                 invisible="state == 'archived'"/>
-                        <field name="state" widget="statusbar" statusbar_visible="draft,posted,archived"/>
+                        <field name="state" widget="statusbar" statusbar_visible="draft,archived"/>
                     </header>
                     <sheet>
                         <group>
@@ -28,6 +26,11 @@
                             <field name="overtime_hours_before_sunset"   widget="float_time" readonly="1"/>
                             <field name="overtime_hours_after_sunset"    widget="float_time" readonly="1"/>
                             <field name="total_overtime_hours"           widget="float_time" readonly="1"/>
+                        </group>
+                        <group string="Payroll">
+                            <field name="posted_hours"                widget="float_time" readonly="1"/>
+                            <field name="related_overtime_request_id" readonly="1"/>
+                            <field name="work_entry"                  readonly="1"/>
                         </group>
                     </sheet>
                     <chatter/>
@@ -46,7 +49,6 @@
                     <field name="overtime_start_time" widget="float_time" optional="show"/>
                     <field name="worked_overtime" widget="float_time" optional="show"/>
                     <field name="state" widget="badge"
-                           decoration-success="state == 'posted'"
                            decoration-muted="state == 'archived'"/>
                 </list>
             </field>
@@ -63,7 +65,6 @@
                     <filter name="filter_has_overtime" string="Has Overtime" domain="[('overtime_hours', '>', 0)]"/>
                     <filter name="filter_no_overtime" string="No Overtime" domain="[('overtime_hours', '=', 0)]"/>
                     <filter name="filter_draft" string="Draft" domain="[('state', '=', 'draft')]"/>
-                    <filter name="filter_posted" string="Posted" domain="[('state', '=', 'posted')]"/>
                     <filter name="filter_archived" string="Archived" domain="[('state', '=', 'archived')]"/>
                     <filter name="group_by_employee" string="Employee" context="{'group_by': 'employee_id'}"/>
                     <filter name="group_by_date" string="Date" context="{'group_by': 'date'}"/>
@@ -98,6 +99,8 @@
             <field name="interval_type">days</field>
             <field name="active">True</field>
         </record>
+
+    <function model="hr.overtime" name="_migrate_dropped_states"/>
 
     </data>
 </odoo>

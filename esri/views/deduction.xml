@@ -8,16 +8,11 @@
             <field name="arch" type="xml">
                 <form string="Deduction" create="false">
                     <header>
-                        <button name="action_post" string="Post" type="object"
-                                class="oe_highlight" invisible="state != 'draft'"/>
-                        <button name="action_warning" string="Warning" type="object"
-                                invisible="state not in ('draft', 'posted')"/>
                         <button name="action_set_to_draft" string="Reset to Draft" type="object"
-                                invisible="was_posted or state not in ('warning', 'archived')"/>
+                                invisible="state != 'archived'"/>
                         <button name="action_archive_record" string="Archive" type="object"
                                 invisible="state == 'archived'"/>
-                        <field name="was_posted" invisible="1"/>
-                        <field name="state" widget="statusbar" statusbar_visible="draft,posted,warning,archived"/>
+                        <field name="state" widget="statusbar" statusbar_visible="draft,archived"/>
                     </header>
                     <sheet>
                         <group>
@@ -52,8 +47,6 @@
                     <field name="daily_check" widget="float_time"/>
                     <field name="deduction"   widget="float_time" sum="Total Deduction"/>
                     <field name="state" widget="badge"
-                           decoration-success="state == 'posted'"
-                           decoration-warning="state == 'warning'"
                            decoration-muted="state == 'archived'"/>
                 </list>
             </field>
@@ -68,8 +61,6 @@
                     <field name="employee_id"/>
                     <field name="date"/>
                     <filter name="filter_draft" string="Draft" domain="[('state', '=', 'draft')]"/>
-                    <filter name="filter_posted" string="Posted" domain="[('state', '=', 'posted')]"/>
-                    <filter name="filter_warning" string="Warning" domain="[('state', '=', 'warning')]"/>
                     <filter name="filter_archived" string="Archived" domain="[('state', '=', 'archived')]"/>
                     <separator/>
                     <filter name="filter_has_deduction" string="Has Deduction" domain="[('deduction', '>', 0)]"/>
@@ -118,6 +109,8 @@
             <field name="interval_type">days</field>
             <field name="active">True</field>
         </record>
+
+    <function model="deduction" name="_migrate_dropped_states"/>
 
     </data>
 </odoo>

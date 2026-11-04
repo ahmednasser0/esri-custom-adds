@@ -26,12 +26,36 @@ class Overtime(models.Model):
     state = fields.Selection(
         [
             ('draft',    'Draft'),
-            ('posted',   'Posted'),
             ('archived', 'Archived'),
         ],
         string='Status',
         default='draft',
         required=True,
+    )
+
+    # Filled in by code later, not by hand: write() turns away anything that is
+    # not an internal call, so these stay read only on the form.
+    posted_hours = fields.Float(
+        string='Posted Hours',
+        readonly=True,
+        copy=False,
+        help="The overtime hours carried over to payroll",
+    )
+    related_overtime_request_id = fields.Many2one(
+        'hr.leave',
+        string='Related Overtime Request',
+        ondelete='set null',
+        readonly=True,
+        copy=False,
+        help="The approved Overtime Request the hours of this record were earned against",
+    )
+    work_entry = fields.Many2one(
+        'hr.work.entry',
+        string='Work Entry',
+        ondelete='set null',
+        readonly=True,
+        copy=False,
+        help="Work Entries generated for Payroll.",
     )
 
     overtime_hours_before_sunset = fields.Float(
@@ -651,11 +675,13 @@ class Overtime(models.Model):
 
     # ─── Status bar transitions ────────────────────────────────────────────────
 
-    def action_post(self):
-        for rec in self:
-            if rec.state != 'draft':
-                raise UserError("Only draft records can be posted.")
-        self.with_context(overtime_sync=True).write({'state': 'posted'})
+    @api.model
+    def _migrate_dropped_states(self):
+        """Posted is gone; a record still on it returns to Draft."""
+        self.env.cr.execute(
+            "UPDATE hr_overtime SET state = 'draft' "
+            "WHERE state IS NULL OR state NOT IN ('draft', 'archived')"
+        )
 
     def action_set_to_draft(self):
         self.with_context(overtime_sync=True).write({'state': 'draft'})
