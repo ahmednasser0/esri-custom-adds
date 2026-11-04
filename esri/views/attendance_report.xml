@@ -17,6 +17,8 @@
                 <field name="start_from" widget="float_time"/>
                 <field name="end_to" widget="float_time"/>
                 <field name="worked_hours" widget="float_time" sum="Total Worked"/>
+                <field name="late_minutes" widget="float_time" optional="show"/>
+                <field name="early_leave_minutes" widget="float_time" optional="show"/>
                 <field name="daily_check" widget="float_time"/>
                 <field name="deduction" widget="float_time" sum="Total Deduction"/>
                 <field name="monthly_permission" widget="float_time"/>
@@ -43,18 +45,41 @@
                             <field name="check_in" widget="float_time"/>
                             <field name="check_out" widget="float_time"/>
                             <field name="worked_hours" widget="float_time"/>
-                        </group>
-                        <group string="Time Off">
-                            <field name="leave_type_id"/>
                             <field name="start_from" widget="float_time"/>
                             <field name="end_to" widget="float_time"/>
                             <field name="monthly_permission" widget="float_time"/>
+                        </group>
+                        <group string="Daily Activities">
+                            <field name="leave_type_id"/>
+                            <field name="late_minutes" widget="float_time"/>
+                            <field name="early_leave_minutes" widget="float_time"/>
                         </group>
                         <group string="Deduction">
                             <field name="daily_check" widget="float_time"/>
                             <field name="deduction" widget="float_time"/>
                         </group>
                     </group>
+                    <notebook>
+                        <page string="Time Off" name="time_off">
+                            <!-- Laid out like the Time Off list rather than
+                                 pointed at it by xml id: Odoo moves those
+                                 between versions and a missing one stops the
+                                 module loading. -->
+                            <field name="leave_ids" nolabel="1" readonly="1">
+                                <list string="Time Off" create="false" edit="false" delete="false">
+                                    <field name="holiday_status_id"/>
+                                    <field name="request_date_from" string="Start Date"/>
+                                    <field name="request_date_to" string="End Date"/>
+                                    <field name="number_of_hours" widget="float_time" optional="show"/>
+                                    <field name="state"
+                                           decoration-success="state == 'validate'"
+                                           decoration-info="state in ('confirm', 'validate1')"
+                                           decoration-danger="state == 'refuse'"
+                                           widget="badge"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
                 </sheet>
             </form>
         </field>
@@ -75,6 +100,8 @@
                 <filter name="filter_public_holiday" string="Public Holiday" domain="[('comment', '=', 'public_holiday')]"/>
                 <separator/>
                 <filter name="filter_has_deduction" string="Has Deduction" domain="[('deduction', '>', 0)]"/>
+                <filter name="filter_late" string="Late" domain="[('late_minutes', '>', 0)]"/>
+                <filter name="filter_early_leave" string="Left Early" domain="[('early_leave_minutes', '>', 0)]"/>
                 <filter name="filter_on_leave" string="On Leave" domain="[('leave_type_id', '!=', False)]"/>
                 <filter name="group_by_employee" string="Employee" context="{'group_by': 'employee_id'}"/>
                 <filter name="group_by_department" string="Department" context="{'group_by': 'department_id'}"/>

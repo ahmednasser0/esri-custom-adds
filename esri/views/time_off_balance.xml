@@ -35,27 +35,6 @@
                             <field name="actual_balance" widget="float_time"/>
                         </group>
                     </group>
-                    <notebook>
-                        <page string="Time Off" name="time_off">
-                            <!-- Laid out like the Time Off list rather than
-                                 pointed at it by xml id: Odoo moves those
-                                 between versions and a missing one stops the
-                                 module loading. -->
-                            <field name="leave_ids" nolabel="1" readonly="1">
-                                <list string="Time Off" create="false" edit="false" delete="false">
-                                    <field name="holiday_status_id"/>
-                                    <field name="request_date_from"/>
-                                    <field name="request_date_to"/>
-                                    <field name="number_of_hours" widget="float_time" optional="show"/>
-                                    <field name="state"
-                                           decoration-success="state == 'validate'"
-                                           decoration-info="state in ('confirm', 'validate1')"
-                                           decoration-danger="state == 'refuse'"
-                                           widget="badge"/>
-                                </list>
-                            </field>
-                        </page>
-                    </notebook>
                 </sheet>
             </form>
         </field>

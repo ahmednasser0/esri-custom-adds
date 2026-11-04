@@ -42,6 +42,22 @@ class AttendanceReport(models.Model):
         compute='_compute_values', store=True,
         help="The last check-out of the day on the employee's own clock",
     )
+    late_minutes = fields.Float(
+        string='Late Minutes',
+        compute='_compute_values', store=True,
+        help="How late the first check-in was against the Late Check-in Limit on the employee's working schedule, or zero when it was not late",
+    )
+    early_leave_minutes = fields.Float(
+        string='Early Leave Minutes',
+        compute='_compute_values', store=True,
+        help="The day's work hours less the hours worked and less the lateness: what is missing from the end of the day rather than the start of it",
+    )
+    leave_ids = fields.Many2many(
+        'hr.leave',
+        string='Time Off',
+        compute='_compute_leave_ids',
+        help="The employee's time off covering this day, whatever its status",
+    )
     leave_type_id = fields.Many2one(
         'hr.leave.type',
         string='Leave Type',
@@ -165,6 +181,26 @@ class AttendanceReport(models.Model):
         return sum(atts.mapped('worked_hours'))
 
     @api.model
+    def _late_and_early(self, employee, check_in, worked_hours):
+        """
+        (late, early_leave) for the day, both in hours.
+
+        Late is how far the first check-in fell past the Late Check-in Limit on
+        the employee's working schedule, and nothing at all when it did not.
+        Early leave is what the day still owes once the hours worked and the
+        lateness are taken off it - the shortfall at the end of the day rather
+        than at the start. Neither goes below zero: a day worked over is not a
+        day left early.
+        """
+        cal = employee.resource_calendar_id
+        late_limit = cal.late_check_in_limit if cal and cal.late_check_in_limit else 11.0
+        hpd        = cal.daily_work_hours    if cal and cal.daily_work_hours    else 8.0
+
+        late = max(check_in - late_limit, 0.0) if check_in else 0.0
+        early = max(hpd - worked_hours - late, 0.0)
+        return late, early
+
+    @api.model
     def _deduction_figures(self, employee, target_date):
         """(daily_check, deduction) from the day's deduction record."""
         record = self.env['deduction'].sudo().search([
@@ -176,6 +212,19 @@ class AttendanceReport(models.Model):
         return record.daily_check or 0.0, record.deduction or 0.0
 
     # ─── Compute ─────────────────────────────────────────────────────────────
+
+    @api.depends('employee_id', 'date')
+    def _compute_leave_ids(self):
+        Leave = self.env['hr.leave'].sudo()
+        for rec in self:
+            if not rec.employee_id or not rec.date:
+                rec.leave_ids = False
+                continue
+            rec.leave_ids = Leave.search([
+                ('employee_id',       '=',  rec.employee_id.id),
+                ('request_date_from', '<=', rec.date),
+                ('request_date_to',   '>=', rec.date),
+            ])
 
     @api.depends('employee_id', 'date')
     def _compute_values(self):
@@ -191,6 +240,7 @@ class AttendanceReport(models.Model):
                 rec.worked_hours = 0.0
                 rec.daily_check = rec.deduction = 0.0
                 rec.monthly_permission = 0.0
+                rec.late_minutes = rec.early_leave_minutes = 0.0
                 rec.comment = False
                 continue
 
@@ -206,6 +256,8 @@ class AttendanceReport(models.Model):
             rec.worked_hours = self._worked_hours(employee, day)
             rec.daily_check, rec.deduction = self._deduction_figures(employee, day)
             rec.monthly_permission = Balance._balance_hours(employee, permission_type, day)
+            rec.late_minutes, rec.early_leave_minutes = self._late_and_early(
+                employee, rec.check_in, rec.worked_hours)
             rec.comment = self._day_kind(employee, day)
 
     # ─── Daily record creation ───────────────────────────────────────────────
