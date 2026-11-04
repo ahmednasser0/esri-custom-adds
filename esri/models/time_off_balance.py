@@ -46,6 +46,17 @@ class TimeOffBalance(models.Model):
         help="Current Balance minus Deduction, in hours",
     )
 
+    # A many2many rather than a one2many: a one2many needs a field on hr.leave
+    # pointing back here, and a leave does not belong to a balance row. Not
+    # stored either - there is nothing to store, the leaves are looked up each
+    # time the row is read, so they are never out of date.
+    leave_ids = fields.Many2many(
+        'hr.leave',
+        string='Time Off',
+        compute='_compute_leave_ids',
+        help="The employee's time off covering this day, whatever its status",
+    )
+
     _unique_employee_date_balance = models.Constraint(
         'UNIQUE(employee_id, date)',
         'A time off balance already exists for this employee on this date.',
@@ -117,6 +128,19 @@ class TimeOffBalance(models.Model):
         return record.deduction or 0.0
 
     # ─── Compute ─────────────────────────────────────────────────────────────
+
+    @api.depends('employee_id', 'date')
+    def _compute_leave_ids(self):
+        Leave = self.env['hr.leave'].sudo()
+        for rec in self:
+            if not rec.employee_id or not rec.date:
+                rec.leave_ids = False
+                continue
+            rec.leave_ids = Leave.search([
+                ('employee_id',       '=',  rec.employee_id.id),
+                ('request_date_from', '<=', rec.date),
+                ('request_date_to',   '>=', rec.date),
+            ])
 
     @api.depends('employee_id', 'date')
     def _compute_balance(self):
