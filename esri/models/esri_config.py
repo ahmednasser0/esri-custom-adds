@@ -58,6 +58,13 @@ class EsriConfig(models.Model):
         help="The time-off type used as an additional authorization for staff and office assistant",
     )
 
+    annual_leave_type_id = fields.Many2one(
+        'hr.leave.type',
+        string='Annual Leave Time Off Type',
+        ondelete='set null',
+        help="The time-off type a deduction line is counted against on the Time Off Balance report, normally Regular Annual Leave",
+    )
+
     monthly_permission_type_id = fields.Many2one(
         'hr.leave.type',
         string='Monthly Permission Time Off Type',

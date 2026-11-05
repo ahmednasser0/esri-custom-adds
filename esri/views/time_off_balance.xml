@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+    <record id="view_time_off_balance_list" model="ir.ui.view">
+        <field name="name">time.off.balance.list</field>
+        <field name="model">time.off.balance</field>
+        <field name="arch" type="xml">
+            <list string="Time Off Balance" create="false" edit="false">
+                <field name="employee_id"/>
+                <field name="employee_code" optional="show"/>
+                <field name="leave_type_id"/>
+                <field name="start_date"/>
+                <field name="end_date"/>
+                <field name="number_of_days" sum="Total Days"/>
+                <field name="status"/>
+                <field name="description" optional="show"/>
+                <field name="source"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_time_off_balance_form" model="ir.ui.view">
+        <field name="name">time.off.balance.form</field>
+        <field name="model">time.off.balance</field>
+        <field name="arch" type="xml">
+            <form string="Time Off Balance" create="false" edit="false">
+                <sheet>
+                    <group>
+                        <group string="Employee">
+                            <field name="employee_id"/>
+                            <field name="employee_code"/>
+                            <field name="leave_type_id"/>
+                        </group>
+                        <group string="Line">
+                            <field name="start_date"/>
+                            <field name="end_date"/>
+                            <field name="number_of_days"/>
+                            <field name="status"/>
+                            <field name="source"/>
+                        </group>
+                    </group>
+                    <group string="Description">
+                        <field name="description" nolabel="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_time_off_balance_pivot" model="ir.ui.view">
+        <field name="name">time.off.balance.pivot</field>
+        <field name="model">time.off.balance</field>
+        <field name="arch" type="xml">
+            <pivot string="Time Off Balance">
+                <field name="employee_id" type="row"/>
+                <field name="source" type="col"/>
+                <field name="number_of_days" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+
+    <record id="view_time_off_balance_search" model="ir.ui.view">
+        <field name="name">time.off.balance.search</field>
+        <field name="model">time.off.balance</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="employee_id"/>
+                <field name="employee_code"/>
+                <field name="leave_type_id"/>
+                <field name="description"/>
+                <filter name="filter_time_off" string="Time Off" domain="[('source', '=', 'time_off')]"/>
+                <filter name="filter_allocation" string="Allocation" domain="[('source', '=', 'allocation')]"/>
+                <filter name="filter_deduction" string="Deduction" domain="[('source', '=', 'deduction')]"/>
+                <separator/>
+                <filter name="group_by_employee" string="Employee" context="{'group_by': 'employee_id'}"/>
+                <filter name="group_by_type" string="Time Off Type" context="{'group_by': 'leave_type_id'}"/>
+                <filter name="group_by_source" string="Source" context="{'group_by': 'source'}"/>
+                <filter name="group_by_status" string="Status" context="{'group_by': 'status'}"/>
+                <filter name="group_by_start" string="Start Date" context="{'group_by': 'start_date'}"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_time_off_balance" model="ir.actions.act_window">
+        <field name="name">Time Off Balance</field>
+        <field name="res_model">time.off.balance</field>
+        <field name="view_mode">list,form,pivot</field>
+        <field name="search_view_id" ref="view_time_off_balance_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No balance lines yet</p>
+            <p>
+                A line is written for every time off, every allocation and
+                every deduction, and rewritten whenever that record changes.
+            </p>
+        </field>
+    </record>
+
+    <menuitem id="menu_time_off_balance"
+              name="Time Off Balance"
+              parent="menu_esri_attendance_reports"
+              action="action_time_off_balance"
+              sequence="20"/>
+
+    <!-- Writes the lines for everything already in the database, so the
+         report is complete the first time it is opened rather than only from
+         the next change onwards. -->
+    <function model="time.off.balance" name="_rebuild_all"/>
+
+    </data>
+</odoo>

@@ -21,7 +21,8 @@ MINUTE_EPS = HOUR_EPS * 60.0
 class Deduction(models.Model):
     _name        = 'deduction'
     _description = 'Employee Daily Deduction'
-    _inherit     = ['mail.thread', 'mail.activity.mixin']
+    _inherit     = ['mail.thread', 'mail.activity.mixin',
+                    'time.off.balance.source.mixin']
     _rec_name    = 'employee_id'
     _order       = 'date desc, employee_id'
 
@@ -35,6 +36,10 @@ class Deduction(models.Model):
     )
     deducted_days = fields.Float(
         string='Deducted Days',
+    )
+    description = fields.Char(
+        string='Description',
+        help="A note on why the deduction was made; it is carried across to the employee's Time Off Balance line",
     )
     work_entry = fields.Many2one(
         'hr.work.entry',
