@@ -139,11 +139,22 @@
         </field>
     </record>
 
+    <!-- The report's parent menu. Declared without a parent of its own, which
+         always loads, then moved into the Employees app by the call below:
+         naming an hr menu in the xml broke the load twice, because Odoo moves
+         those ids between versions. -->
+    <menuitem id="menu_esri_attendance_reports"
+              name="Attendance Report"
+              sequence="90"/>
+
     <menuitem id="menu_attendance_report"
               name="Attendance"
               parent="menu_esri_attendance_reports"
               action="action_attendance_report"
               sequence="10"/>
+
+    <function model="attendance.report" name="_attach_to_employees_app"/>
+    <function model="attendance.report" name="_refresh_employee_codes"/>
 
     <!-- ─── Cron: create the attendance report rows ────────────────────── -->
     <record id="ir_cron_attendance_report" model="ir.cron">

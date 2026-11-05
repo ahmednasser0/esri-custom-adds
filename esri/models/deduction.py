@@ -297,7 +297,7 @@ class Deduction(models.Model):
         with it: each one goes in its own savepoint and a failure is logged and
         left there. The row stays stale; the day's real work goes through.
         """
-        for model in ('time.off.balance', 'attendance.report'):
+        for model in ('attendance.report',):
             try:
                 # The savepoint matters: a failed query aborts the whole
                 # transaction, so catching the error without rolling back to

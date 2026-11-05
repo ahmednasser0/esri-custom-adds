@@ -25,7 +25,6 @@ Management Attendance and Human Resources
         'views/employee_hr.xml',
         'views/daily_report.xml',
         'views/overtime.xml',
-        'views/time_off_balance.xml',
         'views/attendance_report.xml',
         # 'views/hr_leave_allocations_view.xml',
     ],

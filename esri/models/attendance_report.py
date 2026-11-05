@@ -1,6 +1,9 @@
+import logging
 from datetime import date, timedelta
 from odoo import fields, models, api
 from .models import classify_day, employee_tz, local_hour
+
+_logger = logging.getLogger(__name__)
 
 
 class AttendanceReport(models.Model):
@@ -211,6 +214,55 @@ class AttendanceReport(models.Model):
             return 0.0, 0.0
         return record.daily_check or 0.0, record.deduction or 0.0
 
+    @api.model
+    def _hours_per_day(self, employee):
+        cal = employee.resource_calendar_id
+        for value in (getattr(cal, 'hours_per_day', 0.0),
+                      getattr(cal, 'daily_work_hours', 0.0)):
+            if value:
+                return value
+        return 8.0
+
+    @api.model
+    def _allocation_hours(self, allocation, employee):
+        """One allocation expressed in hours."""
+        hours = getattr(allocation, 'number_of_hours_display', 0.0) or 0.0
+        if hours:
+            return hours
+        return (allocation.number_of_days or 0.0) * self._hours_per_day(employee)
+
+    @api.model
+    def _balance_hours(self, employee, leave_type, target_date):
+        """
+        What is left of leave_type for employee on target_date, in hours:
+        everything allocated and running on that day, less everything already
+        taken by then.
+        """
+        if not leave_type:
+            return 0.0
+
+        allocations = self.env['hr.leave.allocation'].sudo().search([
+            ('employee_id',       '=', employee.id),
+            ('holiday_status_id', '=', leave_type.id),
+            ('state',             '=', 'validate'),
+            ('date_from',        '<=', target_date),
+            '|', ('date_to', '=', False), ('date_to', '>=', target_date),
+        ])
+        allocated = sum(self._allocation_hours(a, employee) for a in allocations)
+
+        # A leave counts from the day it starts; one still running on
+        # target_date is counted in full, the way the balance on the Time Off
+        # screen already reads it.
+        leaves = self.env['hr.leave'].sudo().search([
+            ('employee_id',        '=', employee.id),
+            ('holiday_status_id',  '=', leave_type.id),
+            ('state',              '=', 'validate'),
+            ('request_date_from', '<=', target_date),
+        ])
+        taken = sum(l.number_of_hours or 0.0 for l in leaves)
+
+        return allocated - taken
+
     # ─── Compute ─────────────────────────────────────────────────────────────
 
     @api.depends('employee_id', 'date')
@@ -230,7 +282,6 @@ class AttendanceReport(models.Model):
     def _compute_values(self):
         cfg             = self.env['esri.config'].sudo().get_config()
         permission_type = cfg.monthly_permission_type_id
-        Balance         = self.env['time.off.balance']
 
         for rec in self:
             if not rec.employee_id or not rec.date:
@@ -255,7 +306,7 @@ class AttendanceReport(models.Model):
 
             rec.worked_hours = self._worked_hours(employee, day)
             rec.daily_check, rec.deduction = self._deduction_figures(employee, day)
-            rec.monthly_permission = Balance._balance_hours(employee, permission_type, day)
+            rec.monthly_permission = self._balance_hours(employee, permission_type, day)
             rec.late_minutes, rec.early_leave_minutes = self._late_and_early(
                 employee, rec.check_in, rec.worked_hours)
             rec.comment = self._day_kind(employee, day)
@@ -288,6 +339,51 @@ class AttendanceReport(models.Model):
     @api.model
     def _cron_create_reports(self):
         self._create_reports_for_date(date.today() - timedelta(days=1))
+
+    @api.model
+    def _refresh_employee_codes(self):
+        """
+        Work the Employee ID out again on every row.
+
+        The column used to be filled by a compute that went looking through
+        several identifier fields; it now simply follows the employee's
+        barcode. A stored column keeps whatever it was last given, so rows
+        written under the old rule would otherwise keep showing it.
+        """
+        try:
+            rows = self.sudo().search([])
+            if rows:
+                self.env.add_to_compute(self._fields['employee_code'], rows)
+                rows.flush_recordset()
+        except Exception:
+            _logger.warning("Could not refresh the Employee ID column",
+                            exc_info=True)
+
+    @api.model
+    def _attach_to_employees_app(self):
+        """
+        Move the report's parent menu into the Employees app.
+
+        The app is looked up rather than named in the xml: a menu id that has
+        moved between Odoo versions stops the module loading, so the menu is
+        declared on its own and placed here, and anything that goes wrong
+        leaves it where it was instead of failing the upgrade.
+        """
+        try:
+            menu = self.env.ref('esri.menu_esri_attendance_reports', raise_if_not_found=False)
+            root = self.env.ref('hr.menu_hr_root', raise_if_not_found=False)
+            if not root:
+                # Fall back to the app menu by name.
+                root = self.env['ir.ui.menu'].sudo().search([
+                    ('parent_id', '=', False),
+                    ('name', '=', 'Employees'),
+                ], limit=1)
+            if menu and root and menu.parent_id.id != root.id:
+                menu.sudo().parent_id = root.id
+        except Exception:
+            _logger.warning("Could not move the Attendance Report menu into the "
+                            "Employees app; it stays where it was declared",
+                            exc_info=True)
 
     def unlink(self):
         """Deleting a row rebuilds it, the way the other daily records do."""
