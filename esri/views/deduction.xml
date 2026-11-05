@@ -24,6 +24,7 @@
                             <field name="deduction"      widget="float_time" readonly="1"/>
                             <field name="deducted_days"  widget="float_time"/>
                             <field name="work_entry"/>
+                            <field name="description" placeholder="Why the deduction was made"/>
                         </group>
                     </sheet>
                     <chatter/>
@@ -46,6 +47,7 @@
                     <field name="core_check"  widget="float_time"/>
                     <field name="daily_check" widget="float_time"/>
                     <field name="deduction"   widget="float_time" sum="Total Deduction"/>
+                    <field name="description" optional="show"/>
                     <field name="state" widget="badge"
                            decoration-muted="state == 'archived'"/>
                 </list>
@@ -60,6 +62,7 @@
                 <search>
                     <field name="employee_id"/>
                     <field name="date"/>
+                    <field name="description"/>
                     <filter name="filter_draft" string="Draft" domain="[('state', '=', 'draft')]"/>
                     <filter name="filter_archived" string="Archived" domain="[('state', '=', 'archived')]"/>
                     <separator/>
