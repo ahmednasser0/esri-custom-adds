@@ -547,6 +547,7 @@ class Overtime(models.Model):
 
             # Overtime is only earned against an approved Overtime Request.
             cal      = rec.employee_id.resource_calendar_id
+            day_kind = classify_day(cal, rec.date.strftime('%A'))
             if self._skip_overtime(rec.employee_id, rec.date):
                 rec.overtime_start_time = 0.0
                 continue
@@ -645,13 +646,6 @@ class Overtime(models.Model):
             # overtime_start_time has placed it after the full working day.
             cal      = rec.employee_id.resource_calendar_id
             day_kind = classify_day(cal, rec.date.strftime('%A'))
-            # Public holidays follow the weekend-first rules for everyone, the
-            # same way _compute_total_overtime reads them. Without this an
-            # attendance-only employee working a public holiday that falls on a
-            # working day has a full day taken off the hours shown here, while
-            # the hours he is actually paid for keep the whole day.
-            if self._is_public_holiday(rec.date):
-                day_kind = 'weekend_first'
             rec.worked_overtime = self._overtime_hours_for(
                 rec.employee_id, rec.date, day_kind)
 
