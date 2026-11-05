@@ -547,7 +547,6 @@ class Overtime(models.Model):
 
             # Overtime is only earned against an approved Overtime Request.
             cal      = rec.employee_id.resource_calendar_id
-            day_kind = classify_day(cal, rec.date.strftime('%A'))
             if self._skip_overtime(rec.employee_id, rec.date):
                 rec.overtime_start_time = 0.0
                 continue
@@ -621,7 +620,7 @@ class Overtime(models.Model):
             # the normal day still covers) does not drag the split earlier.
             rec.overtime_start_time = result
 
-    @api.depends('overtime_start_time')
+    @api.depends('overtime_start_time', 'employee_id', 'date')
     def _compute_worked_overtime(self):
         """
         The overtime hours on a weekday: whatever the day reaches beyond a full
@@ -632,7 +631,7 @@ class Overtime(models.Model):
         all earns nothing either - overtime is only earned against a request.
         """
         for rec in self:
-            if not rec.employee_id or not rec.date or not rec.overtime_start_time:
+            if not rec.employee_id or not rec.date:
                 rec.worked_overtime = 0.0
                 continue
 
@@ -640,12 +639,29 @@ class Overtime(models.Model):
                 rec.worked_overtime = 0.0
                 continue
 
-            # This field only drives the weekday sunset split; the weekend days
-            # are paid by their own rule in _compute_total_overtime. It is
-            # already the overtime itself, so nothing is subtracted from it -
-            # overtime_start_time has placed it after the full working day.
             cal      = rec.employee_id.resource_calendar_id
             day_kind = classify_day(cal, rec.date.strftime('%A'))
+            # Public holidays follow the weekend-first rules for everyone, the
+            # same way _compute_total_overtime reads them. Without this a day
+            # paid at the flat holiday rate is still measured as a working day
+            # here, and an attendance-only employee has a full day taken off
+            # the hours shown against the whole day he is paid for.
+            if self._is_public_holiday(rec.date):
+                day_kind = 'weekend_first'
+
+            # Only a working day waits for the full day to be covered before
+            # overtime starts; that is what overtime_start_time marks, and this
+            # field drives the sunset split that goes with it. A weekend or a
+            # public holiday is overtime from the first hour and is paid by its
+            # own flat rule, so a day short of the full hours still has hours
+            # to show.
+            if day_kind == 'weekday' and not rec.overtime_start_time:
+                rec.worked_overtime = 0.0
+                continue
+
+            # Nothing is subtracted from the result - on a working day
+            # overtime_start_time has already placed it after the full day, and
+            # on the other days every hour worked counts.
             rec.worked_overtime = self._overtime_hours_for(
                 rec.employee_id, rec.date, day_kind)
 
