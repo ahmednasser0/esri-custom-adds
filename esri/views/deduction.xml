@@ -16,15 +16,28 @@
                     </header>
                     <sheet>
                         <group>
-                            <field name="employee_id"    readonly="1"/>
-                            <field name="date"           readonly="1"/>
-                            <field name="employee_rule"  readonly="1"/>
-                            <field name="core_check"     widget="float_time" readonly="1"/>
-                            <field name="daily_check"    widget="float_time" readonly="1"/>
-                            <field name="deduction"      widget="float_time" readonly="1"/>
-                            <field name="deducted_days"  widget="float_time"/>
-                            <field name="work_entry"/>
-                            <field name="description" placeholder="Why the deduction was made"/>
+                            <group string="Employee">
+                                <field name="employee_id"   readonly="1"/>
+                                <field name="date"          readonly="1"/>
+                                <field name="employee_rule" readonly="1"/>
+                            </group>
+                            <group string="The Day">
+                                <field name="core_check"  widget="float_time" readonly="1"/>
+                                <field name="daily_check" widget="float_time" readonly="1"/>
+                            </group>
+                        </group>
+                        <group>
+                            <group string="Deduction">
+                                <field name="deduction"     widget="float_time" readonly="1"/>
+                                <field name="deducted_days" widget="float_time"/>
+                            </group>
+                            <group string="Payroll">
+                                <field name="work_entry"/>
+                            </group>
+                        </group>
+                        <group string="Description">
+                            <field name="description" nolabel="1"
+                                   placeholder="Why the deduction was made"/>
                         </group>
                     </sheet>
                     <chatter/>
@@ -37,17 +50,20 @@
             <field name="name">deduction.list</field>
             <field name="model">deduction</field>
             <field name="arch" type="xml">
-                <list string="Deductions" create="false" edit="false">
+                <list string="Deductions" create="false" edit="false"
+                      decoration-muted="state == 'archived'">
                     <header>
                         <button name="action_run_post_deduction" string="Run Post Deduction" type="object"/>
                         <button name="action_run_work_entry" string="Run Work Entry" type="object"/>
                     </header>
                     <field name="employee_id"/>
                     <field name="date"/>
-                    <field name="core_check"  widget="float_time"/>
-                    <field name="daily_check" widget="float_time"/>
-                    <field name="deduction"   widget="float_time" sum="Total Deduction"/>
-                    <field name="description" optional="show"/>
+                    <field name="employee_rule" optional="hide"/>
+                    <field name="core_check"    widget="float_time" optional="show"/>
+                    <field name="daily_check"   widget="float_time" optional="show"/>
+                    <field name="deduction"     widget="float_time" sum="Total Deduction"/>
+                    <field name="deducted_days" widget="float_time" optional="hide" sum="Total Days"/>
+                    <field name="description"   optional="show"/>
                     <field name="state" widget="badge"
                            decoration-muted="state == 'archived'"/>
                 </list>
@@ -66,11 +82,16 @@
                     <filter name="filter_draft" string="Draft" domain="[('state', '=', 'draft')]"/>
                     <filter name="filter_archived" string="Archived" domain="[('state', '=', 'archived')]"/>
                     <separator/>
-                    <filter name="filter_has_deduction" string="Has Deduction" domain="[('deduction', '>', 0)]"/>
+                    <filter name="filter_has_deduction" string="Has Deduction" domain="[('deduction', '&gt;', 0)]"/>
                     <filter name="filter_no_deduction" string="No Deduction" domain="[('deduction', '=', 0)]"/>
-                    <filter name="group_by_employee" string="Employee" context="{'group_by': 'employee_id'}"/>
-                    <filter name="group_by_date" string="Date" context="{'group_by': 'date'}"/>
-                    <filter name="group_by_state" string="Status" context="{'group_by': 'state'}"/>
+                    <separator/>
+                    <filter name="filter_date" string="Date" date="date"/>
+                    <group expand="0" string="Group By">
+                        <filter name="group_by_employee" string="Employee" context="{'group_by': 'employee_id'}"/>
+                        <filter name="group_by_rule" string="Employee Rule" context="{'group_by': 'employee_rule'}"/>
+                        <filter name="group_by_date" string="Date" context="{'group_by': 'date'}"/>
+                        <filter name="group_by_state" string="Status" context="{'group_by': 'state'}"/>
+                    </group>
                 </search>
             </field>
         </record>
@@ -82,13 +103,15 @@
             <field name="view_mode">list,form</field>
             <field name="search_view_id" ref="deduction_search_view"/>
             <field name="help" type="html">
-                <p class="o_view_nocontent_smiling_face">
-                    No Deductions Created
+                <p class="o_view_nocontent_smiling_face">No deduction rows yet</p>
+                <p>
+                    A row is written for every employee each day, and worked out
+                    again whenever that day's attendance or time off changes.
                 </p>
             </field>
         </record>
 
-        <!-- ─── Menu Items ─────────────────────────────────────────────────── -->
+        <!-- ─── Menus ─────────────────────────────────────────────────────── -->
         <menuitem
             name="Advanced Allocation"
             id="attendance_deduction"

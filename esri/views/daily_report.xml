@@ -9,13 +9,21 @@
                 <form string="Daily Report" edit="false" create="false" delete="false">
                     <sheet>
                         <group>
-                            <field name="employee_id"         readonly="1"/>
-                            <field name="date"                readonly="1"/>
-                            <field name="last_check_out"      widget="float_time" readonly="1"/>
-                            <field name="effective_check_out" widget="float_time" readonly="1"/>
-                            <field name="minus_minutes"       widget="float_time" readonly="1"/>
-                            <field name="total_worked_hours"  widget="float_time" readonly="1"/>
-                            <field name="actual_worked_hours" widget="float_time" readonly="1"/>
+                            <group string="Employee">
+                                <field name="employee_id" readonly="1"/>
+                                <field name="date"        readonly="1"/>
+                            </group>
+                            <group string="Check-out">
+                                <field name="last_check_out"      widget="float_time" readonly="1"/>
+                                <field name="effective_check_out" widget="float_time" readonly="1"/>
+                                <field name="minus_minutes"       widget="float_time" readonly="1"/>
+                            </group>
+                        </group>
+                        <group>
+                            <group string="Worked Hours">
+                                <field name="total_worked_hours"  widget="float_time" readonly="1"/>
+                                <field name="actual_worked_hours" widget="float_time" readonly="1"/>
+                            </group>
                         </group>
                     </sheet>
                 </form>
@@ -30,9 +38,9 @@
                 <list string="Daily Report" create="false" edit="false">
                     <field name="employee_id"/>
                     <field name="date"/>
-                    <field name="last_check_out"      widget="float_time"/>
-                    <field name="effective_check_out" widget="float_time"/>
-                    <field name="minus_minutes"       widget="float_time"/>
+                    <field name="last_check_out"      widget="float_time" optional="show"/>
+                    <field name="effective_check_out" widget="float_time" optional="show"/>
+                    <field name="minus_minutes"       widget="float_time" optional="show"/>
                     <field name="total_worked_hours"  widget="float_time" sum="Total Worked"/>
                     <field name="actual_worked_hours" widget="float_time" sum="Total Actual"/>
                 </list>
@@ -47,8 +55,14 @@
                 <search>
                     <field name="employee_id"/>
                     <field name="date"/>
-                    <filter name="group_by_employee" string="Employee" context="{'group_by': 'employee_id'}"/>
-                    <filter name="group_by_date" string="Date" context="{'group_by': 'date'}"/>
+                    <filter name="filter_has_minus" string="Minus Minutes"
+                            domain="[('minus_minutes', '&gt;', 0)]"/>
+                    <separator/>
+                    <filter name="filter_date" string="Date" date="date"/>
+                    <group expand="0" string="Group By">
+                        <filter name="group_by_employee" string="Employee" context="{'group_by': 'employee_id'}"/>
+                        <filter name="group_by_date" string="Date" context="{'group_by': 'date'}"/>
+                    </group>
                 </search>
             </field>
         </record>
@@ -59,6 +73,13 @@
             <field name="res_model">daily.report</field>
             <field name="view_mode">list,form</field>
             <field name="search_view_id" ref="daily_report_search_view"/>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No daily report rows yet</p>
+                <p>
+                    A row is written for every employee each day, and worked out
+                    again whenever that day's attendance or time off changes.
+                </p>
+            </field>
         </record>
 
         <!-- ─── Menu ──────────────────────────────────────────────────────── -->

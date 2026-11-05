@@ -73,11 +73,14 @@
                 <filter name="filter_allocation" string="Allocation" domain="[('source', '=', 'allocation')]"/>
                 <filter name="filter_deduction" string="Deduction" domain="[('source', '=', 'deduction')]"/>
                 <separator/>
-                <filter name="group_by_employee" string="Employee" context="{'group_by': 'employee_id'}"/>
-                <filter name="group_by_type" string="Time Off Type" context="{'group_by': 'leave_type_id'}"/>
-                <filter name="group_by_source" string="Source" context="{'group_by': 'source'}"/>
-                <filter name="group_by_status" string="Status" context="{'group_by': 'status'}"/>
-                <filter name="group_by_start" string="Start Date" context="{'group_by': 'start_date'}"/>
+                <filter name="filter_start_date" string="Start Date" date="start_date"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_by_employee" string="Employee" context="{'group_by': 'employee_id'}"/>
+                    <filter name="group_by_type" string="Time Off Type" context="{'group_by': 'leave_type_id'}"/>
+                    <filter name="group_by_source" string="Source" context="{'group_by': 'source'}"/>
+                    <filter name="group_by_status" string="Status" context="{'group_by': 'status'}"/>
+                    <filter name="group_by_start" string="Start Date" context="{'group_by': 'start_date'}"/>
+                </group>
             </search>
         </field>
     </record>

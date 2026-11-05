@@ -103,10 +103,15 @@
                 <filter name="filter_late" string="Late" domain="[('late_minutes', '>', 0)]"/>
                 <filter name="filter_early_leave" string="Left Early" domain="[('early_leave_minutes', '>', 0)]"/>
                 <filter name="filter_on_leave" string="On Leave" domain="[('leave_type_id', '!=', False)]"/>
-                <filter name="group_by_employee" string="Employee" context="{'group_by': 'employee_id'}"/>
-                <filter name="group_by_department" string="Department" context="{'group_by': 'department_id'}"/>
-                <filter name="group_by_date" string="Date" context="{'group_by': 'date'}"/>
-                <filter name="group_by_comment" string="Day Type" context="{'group_by': 'comment'}"/>
+                <separator/>
+                <filter name="filter_date" string="Date" date="date"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_by_employee" string="Employee" context="{'group_by': 'employee_id'}"/>
+                    <filter name="group_by_department" string="Department" context="{'group_by': 'department_id'}"/>
+                    <filter name="group_by_type" string="Leave Type" context="{'group_by': 'leave_type_id'}"/>
+                    <filter name="group_by_date" string="Date" context="{'group_by': 'date'}"/>
+                    <filter name="group_by_comment" string="Day Type" context="{'group_by': 'comment'}"/>
+                </group>
             </search>
         </field>
     </record>

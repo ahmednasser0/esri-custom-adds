@@ -8,6 +8,7 @@
             <field name="arch" type="xml">
                 <form string="Esri HR Configurations" create="0" delete="0">
                     <sheet>
+                        <group>
                         <group string="Weekday Overtime">
                             <field name="overtime_cutoff" widget="float_time"/>
                             <field name="max_worked_hours" widget="float_time"/>
@@ -30,6 +31,7 @@
                         <group string="Reports">
                             <field name="annual_leave_type_id" options="{'no_create': True}"/>
                             <field name="monthly_permission_type_id" options="{'no_create': True}"/>
+                        </group>
                         </group>
                     </sheet>
                 </form>

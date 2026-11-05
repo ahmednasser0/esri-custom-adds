@@ -16,21 +16,27 @@
                     </header>
                     <sheet>
                         <group>
-                            <field name="employee_id"    readonly="1"/>
-                            <field name="date"           readonly="1"/>
-                            <field name="employee_rule"  readonly="1"/>
-                            <field name="overtime_start_time" widget="float_time" readonly="1"/>
-                            <field name="worked_overtime" widget="float_time" readonly="1"/>
+                            <group string="Employee">
+                                <field name="employee_id"   readonly="1"/>
+                                <field name="date"          readonly="1"/>
+                                <field name="employee_rule" readonly="1"/>
+                            </group>
+                            <group string="The Day">
+                                <field name="overtime_start_time" widget="float_time" readonly="1"/>
+                                <field name="worked_overtime"     widget="float_time" readonly="1"/>
+                            </group>
                         </group>
-                        <group string="Overtime Breakdown">
-                            <field name="overtime_hours_before_sunset"   widget="float_time" readonly="1"/>
-                            <field name="overtime_hours_after_sunset"    widget="float_time" readonly="1"/>
-                            <field name="total_overtime_hours"           widget="float_time" readonly="1"/>
-                        </group>
-                        <group string="Payroll">
-                            <field name="posted_hours"                widget="float_time" readonly="1"/>
-                            <field name="related_overtime_request_id" readonly="1"/>
-                            <field name="work_entry"                  readonly="1"/>
+                        <group>
+                            <group string="Overtime Breakdown">
+                                <field name="overtime_hours_before_sunset" widget="float_time" readonly="1"/>
+                                <field name="overtime_hours_after_sunset"  widget="float_time" readonly="1"/>
+                                <field name="total_overtime_hours"         widget="float_time" readonly="1"/>
+                            </group>
+                            <group string="Payroll">
+                                <field name="posted_hours"                widget="float_time" readonly="1"/>
+                                <field name="related_overtime_request_id" readonly="1"/>
+                                <field name="work_entry"                  readonly="1"/>
+                            </group>
                         </group>
                     </sheet>
                     <chatter/>
@@ -43,11 +49,15 @@
             <field name="name">hr.overtime.list</field>
             <field name="model">hr.overtime</field>
             <field name="arch" type="xml">
-                <list string="Overtime" create="false" edit="false">
+                <list string="Overtime" create="false" edit="false"
+                      decoration-muted="state == 'archived'">
                     <field name="employee_id"/>
                     <field name="date"/>
+                    <field name="employee_rule"       optional="hide"/>
                     <field name="overtime_start_time" widget="float_time" optional="show"/>
-                    <field name="worked_overtime" widget="float_time" optional="show"/>
+                    <field name="worked_overtime"     widget="float_time" optional="show" sum="Total Worked"/>
+                    <field name="total_overtime_hours" widget="float_time" sum="Total Overtime"/>
+                    <field name="posted_hours"        widget="float_time" optional="hide" sum="Total Posted"/>
                     <field name="state" widget="badge"
                            decoration-muted="state == 'archived'"/>
                 </list>
@@ -66,9 +76,14 @@
                     <filter name="filter_no_overtime" string="No Overtime" domain="[('overtime_hours', '=', 0)]"/>
                     <filter name="filter_draft" string="Draft" domain="[('state', '=', 'draft')]"/>
                     <filter name="filter_archived" string="Archived" domain="[('state', '=', 'archived')]"/>
-                    <filter name="group_by_employee" string="Employee" context="{'group_by': 'employee_id'}"/>
-                    <filter name="group_by_date" string="Date" context="{'group_by': 'date'}"/>
-                    <filter name="group_by_state" string="Status" context="{'group_by': 'state'}"/>
+                    <separator/>
+                    <filter name="filter_date" string="Date" date="date"/>
+                    <group expand="0" string="Group By">
+                        <filter name="group_by_employee" string="Employee" context="{'group_by': 'employee_id'}"/>
+                        <filter name="group_by_rule" string="Employee Rule" context="{'group_by': 'employee_rule'}"/>
+                        <filter name="group_by_date" string="Date" context="{'group_by': 'date'}"/>
+                        <filter name="group_by_state" string="Status" context="{'group_by': 'state'}"/>
+                    </group>
                 </search>
             </field>
         </record>
