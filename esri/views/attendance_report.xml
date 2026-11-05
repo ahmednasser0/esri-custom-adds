@@ -105,7 +105,7 @@
                 <filter name="filter_on_leave" string="On Leave" domain="[('leave_type_id', '!=', False)]"/>
                 <separator/>
                 <filter name="filter_date" string="Date" date="date"/>
-                <group expand="0" string="Group By">
+                <group>
                     <filter name="group_by_employee" string="Employee" context="{'group_by': 'employee_id'}"/>
                     <filter name="group_by_department" string="Department" context="{'group_by': 'department_id'}"/>
                     <filter name="group_by_type" string="Leave Type" context="{'group_by': 'leave_type_id'}"/>

@@ -59,7 +59,7 @@
                             domain="[('minus_minutes', '&gt;', 0)]"/>
                     <separator/>
                     <filter name="filter_date" string="Date" date="date"/>
-                    <group expand="0" string="Group By">
+                    <group>
                         <filter name="group_by_employee" string="Employee" context="{'group_by': 'employee_id'}"/>
                         <filter name="group_by_date" string="Date" context="{'group_by': 'date'}"/>
                     </group>

@@ -86,7 +86,7 @@
                     <filter name="filter_no_deduction" string="No Deduction" domain="[('deduction', '=', 0)]"/>
                     <separator/>
                     <filter name="filter_date" string="Date" date="date"/>
-                    <group expand="0" string="Group By">
+                    <group>
                         <filter name="group_by_employee" string="Employee" context="{'group_by': 'employee_id'}"/>
                         <filter name="group_by_rule" string="Employee Rule" context="{'group_by': 'employee_rule'}"/>
                         <filter name="group_by_date" string="Date" context="{'group_by': 'date'}"/>
