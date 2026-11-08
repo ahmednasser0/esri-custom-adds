@@ -29,7 +29,7 @@
                         <group>
                             <group string="Deduction">
                                 <field name="deduction"     widget="float_time" readonly="1"/>
-                                <field name="deducted_days" widget="float_time"/>
+                                <field name="deducted_days"/>
                             </group>
                             <group string="Payroll">
                                 <field name="work_entry"/>
@@ -62,7 +62,7 @@
                     <field name="core_check"    widget="float_time" optional="show"/>
                     <field name="daily_check"   widget="float_time" optional="show"/>
                     <field name="deduction"     widget="float_time" sum="Total Deduction"/>
-                    <field name="deducted_days" widget="float_time" optional="hide" sum="Total Days"/>
+                    <field name="deducted_days" optional="show" sum="Total Days"/>
                     <field name="description"   optional="show"/>
                     <field name="state" widget="badge"
                            decoration-muted="state == 'archived'"/>
@@ -137,6 +137,7 @@
         </record>
 
     <function model="deduction" name="_migrate_dropped_states"/>
+    <function model="deduction" name="_recompute_deducted_days"/>
 
     </data>
 </odoo>

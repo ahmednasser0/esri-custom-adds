@@ -36,6 +36,8 @@ class Deduction(models.Model):
     )
     deducted_days = fields.Float(
         string='Deducted Days',
+        compute='_compute_checks', store=True,
+        help="The day's deduction read in days rather than hours: the deducted hours divided by the Company Day Hours set in Esri Configurations",
     )
     description = fields.Char(
         string='Description',
@@ -198,10 +200,16 @@ class Deduction(models.Model):
         Overtime     = self.env['hr.overtime']
 
         for rec in self:
+            # The deduction is worked out into a local first and written to the
+            # record once at the end, so that the days always follow the hours
+            # however the day turns out.
+            deduction = 0.0
+
             if not rec.employee_id or not rec.date:
                 rec.core_check  = 0.0
                 rec.daily_check = 0.0
                 rec.deduction   = 0.0
+                rec.deducted_days = 0.0
                 continue
 
             cal = rec.employee_id.resource_calendar_id
@@ -215,29 +223,35 @@ class Deduction(models.Model):
 
             # No deduction on weekends or public holidays
             if day_kind != 'weekday' or Overtime._is_public_holiday(rec.date):
-                rec.deduction = 0.0
-                continue
+                deduction = 0.0
 
             # Full absence -> one day and a quarter
             # (attendance policy is still evaluated against the employee's
             # own Working Schedule hpd; only the deducted AMOUNT uses the
             # company-wide Company Day Hours)
-            if daily >= hpd - HOUR_EPS:
-                rec.deduction = absence_rate * company_hours
-                continue
+            elif daily >= hpd - HOUR_EPS:
+                deduction = absence_rate * company_hours
 
-            gap_minutes = max(core, daily) * 60.0
-            if gap_minutes <= MINUTE_EPS:
-                rec.deduction = 0.0
-            elif gap_minutes <= LATE_GRACE_MINUTES + MINUTE_EPS:
-                if self._grace_used_this_month(rec.employee_id, rec.date):
-                    rec.deduction = quarter_rate * company_hours
-                else:
-                    rec.deduction = 0.0   # free once per month
-            elif gap_minutes < LATE_HALF_DAY_LIMIT - MINUTE_EPS:
-                rec.deduction = half_rate * company_hours
             else:
-                rec.deduction = full_rate * company_hours
+                gap_minutes = max(core, daily) * 60.0
+                if gap_minutes <= MINUTE_EPS:
+                    deduction = 0.0
+                elif gap_minutes <= LATE_GRACE_MINUTES + MINUTE_EPS:
+                    if self._grace_used_this_month(rec.employee_id, rec.date):
+                        deduction = quarter_rate * company_hours
+                    else:
+                        deduction = 0.0   # free once per month
+                elif gap_minutes < LATE_HALF_DAY_LIMIT - MINUTE_EPS:
+                    deduction = half_rate * company_hours
+                else:
+                    deduction = full_rate * company_hours
+
+            rec.deduction = deduction
+            # The same deduction read in days rather than hours: the hours are
+            # a rate times the company's day, so dividing by that day gives the
+            # rate back - a quarter, a half, a whole day, or a day and a
+            # quarter for a full absence.
+            rec.deducted_days = (deduction / company_hours) if company_hours else 0.0
 
     # ─── Daily record creation ───────────────────────────────────────────────
 
@@ -345,6 +359,25 @@ class Deduction(models.Model):
         for employee_id, day in days:
             self._ensure_record(employee_id, day)
         return res
+
+    @api.model
+    def _recompute_deducted_days(self):
+        """
+        Work Deducted Days out again on every record.
+
+        The column used to be filled by hand and was left at zero almost
+        everywhere; it now follows the deducted hours. A stored column keeps
+        whatever it was last given, and Odoo does not revisit rows that already
+        have one, so without this the old zeros would stand.
+        """
+        try:
+            rows = self.sudo().search([])
+            if rows:
+                self.env.add_to_compute(self._fields['deducted_days'], rows)
+                rows.flush_recordset()
+        except Exception:
+            _logger.warning("Could not work the Deducted Days column out again",
+                            exc_info=True)
 
     @api.model
     def _migrate_dropped_states(self):
