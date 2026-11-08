@@ -61,22 +61,6 @@ class AttendanceReport(models.Model):
         compute='_compute_leave_ids',
         help="The employee's time off covering this day, whatever its status",
     )
-    leave_type_id = fields.Many2one(
-        'hr.leave.type',
-        string='Leave Type',
-        compute='_compute_values', store=True,
-        help="The approved time off covering this day, where there is one",
-    )
-    start_from = fields.Float(
-        string='Start From',
-        compute='_compute_values', store=True,
-        help="The hour the approved time off starts",
-    )
-    end_to = fields.Float(
-        string='End To',
-        compute='_compute_values', store=True,
-        help="The hour the approved time off ends",
-    )
     worked_hours = fields.Float(
         string='Worked Hours',
         compute='_compute_values', store=True,
@@ -132,31 +116,6 @@ class AttendanceReport(models.Model):
             if att.check_out:
                 last_out = max(last_out, local_hour(att.check_out, tz))
         return first_in, last_out
-
-    @api.model
-    def _leave_of_day(self, employee, target_date):
-        """
-        The approved time off covering the day, with the hours it runs between.
-
-        Where more than one covers the day the earliest is reported: the column
-        names a single type, and a day with two approved leaves on it is a
-        thing to look at on the Time Off screen rather than to squeeze in here.
-        """
-        leaves = self.env['hr.overtime']._get_approved_leaves(employee, target_date)
-        if not leaves:
-            return False, 0.0, 0.0
-
-        leave = leaves.sorted(key=lambda l: (l.request_date_from, l.id))[0]
-
-        hour_from = hour_to = 0.0
-        if getattr(leave, 'request_unit_hours', False):
-            try:
-                hour_from = float(leave.request_hour_from or 0.0)
-                hour_to   = float(leave.request_hour_to   or 0.0)
-            except (TypeError, ValueError):
-                hour_from = hour_to = 0.0
-
-        return leave.holiday_status_id, hour_from, hour_to
 
     @api.model
     def _day_kind(self, employee, target_date):
@@ -286,8 +245,6 @@ class AttendanceReport(models.Model):
         for rec in self:
             if not rec.employee_id or not rec.date:
                 rec.check_in = rec.check_out = 0.0
-                rec.leave_type_id = False
-                rec.start_from = rec.end_to = 0.0
                 rec.worked_hours = 0.0
                 rec.daily_check = rec.deduction = 0.0
                 rec.monthly_permission = 0.0
@@ -298,11 +255,6 @@ class AttendanceReport(models.Model):
             employee, day = rec.employee_id, rec.date
 
             rec.check_in, rec.check_out = self._attendance_bounds(employee, day)
-
-            leave_type, hour_from, hour_to = self._leave_of_day(employee, day)
-            rec.leave_type_id = leave_type.id if leave_type else False
-            rec.start_from    = hour_from
-            rec.end_to        = hour_to
 
             rec.worked_hours = self._worked_hours(employee, day)
             rec.daily_check, rec.deduction = self._deduction_figures(employee, day)

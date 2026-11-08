@@ -13,9 +13,6 @@
                 <field name="department_id"/>
                 <field name="check_in" widget="float_time"/>
                 <field name="check_out" widget="float_time"/>
-                <field name="leave_type_id"/>
-                <field name="start_from" widget="float_time"/>
-                <field name="end_to" widget="float_time"/>
                 <field name="worked_hours" widget="float_time" sum="Total Worked"/>
                 <field name="late_minutes" widget="float_time" optional="show"/>
                 <field name="early_leave_minutes" widget="float_time" optional="show"/>
@@ -45,12 +42,9 @@
                             <field name="check_in" widget="float_time"/>
                             <field name="check_out" widget="float_time"/>
                             <field name="worked_hours" widget="float_time"/>
-                            <field name="start_from" widget="float_time"/>
-                            <field name="end_to" widget="float_time"/>
                             <field name="monthly_permission" widget="float_time"/>
                         </group>
                         <group string="Daily Activities">
-                            <field name="leave_type_id"/>
                             <field name="late_minutes" widget="float_time"/>
                             <field name="early_leave_minutes" widget="float_time"/>
                         </group>
@@ -94,7 +88,6 @@
                 <field name="employee_code"/>
                 <field name="date"/>
                 <field name="department_id"/>
-                <field name="leave_type_id"/>
                 <filter name="filter_working_day" string="Working Day" domain="[('comment', '=', 'working_day')]"/>
                 <filter name="filter_weekend" string="Weekend" domain="[('comment', '=', 'weekend')]"/>
                 <filter name="filter_public_holiday" string="Public Holiday" domain="[('comment', '=', 'public_holiday')]"/>
@@ -102,13 +95,11 @@
                 <filter name="filter_has_deduction" string="Has Deduction" domain="[('deduction', '>', 0)]"/>
                 <filter name="filter_late" string="Late" domain="[('late_minutes', '>', 0)]"/>
                 <filter name="filter_early_leave" string="Left Early" domain="[('early_leave_minutes', '>', 0)]"/>
-                <filter name="filter_on_leave" string="On Leave" domain="[('leave_type_id', '!=', False)]"/>
                 <separator/>
                 <filter name="filter_date" string="Date" date="date"/>
                 <group>
                     <filter name="group_by_employee" string="Employee" context="{'group_by': 'employee_id'}"/>
                     <filter name="group_by_department" string="Department" context="{'group_by': 'department_id'}"/>
-                    <filter name="group_by_type" string="Leave Type" context="{'group_by': 'leave_type_id'}"/>
                     <filter name="group_by_date" string="Date" context="{'group_by': 'date'}"/>
                     <filter name="group_by_comment" string="Day Type" context="{'group_by': 'comment'}"/>
                 </group>
