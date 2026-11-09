@@ -257,6 +257,24 @@ class TimeOffBalance(models.Model):
         model goes in its own savepoint: one that cannot be read leaves the
         other two standing instead of failing the upgrade.
         """
+        # This report used to be a row for every employee on every day. Those
+        # rows survived the change: the table was kept, the new columns were
+        # added to it empty, and the NOT NULL each one wanted could not be put
+        # on a table that already held nothing in it. What is left stands for
+        # no source record and shows as a line with an employee and nothing
+        # else, so it goes. Plain SQL, since the ORM cannot read a row that
+        # breaks the model's own rules.
+        try:
+            with self.env.cr.savepoint():
+                self.env.cr.execute(
+                    "DELETE FROM time_off_balance "
+                    "WHERE source_model IS NULL OR source IS NULL"
+                )
+                self.env.invalidate_all()
+        except Exception:
+            _logger.warning("Could not clear the Time Off Balance lines left "
+                            "over from the old report", exc_info=True)
+
         for model in SOURCES:
             try:
                 with self.env.cr.savepoint():
