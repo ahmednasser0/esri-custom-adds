@@ -321,7 +321,7 @@ class AttendanceReport(models.Model):
         """
         What is left of leave_type for employee on target_date, in hours:
         everything allocated and running on that day, less everything already
-        taken by then.
+        taken by then, and never less than nothing.
         """
         if not leave_type:
             return 0.0
@@ -346,7 +346,9 @@ class AttendanceReport(models.Model):
         ])
         taken = sum(l.number_of_hours or 0.0 for l in leaves)
 
-        return allocated - taken
+        # A balance taken past what was allocated has nothing left in it, so it
+        # reads empty rather than going below zero.
+        return max(allocated - taken, 0.0)
 
     # ─── Compute ─────────────────────────────────────────────────────────────
 
@@ -452,7 +454,7 @@ class AttendanceReport(models.Model):
                          'late_minutes', 'early_leave_minutes',
                          'attendance_hours', 'activities_hours',
                          'total_recorded_hours', 'difference',
-                         'deduction_state'):
+                         'deduction_state', 'monthly_permission'):
                 self.env.add_to_compute(self._fields[name], rows)
             rows.flush_recordset()
         except Exception:
