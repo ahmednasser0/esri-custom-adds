@@ -150,39 +150,61 @@ class AttendanceReport(models.Model):
         return first_in, last_out
 
     @api.model
-    def _leave_bounds(self, employee, target_date):
+    def _leave_intervals(self, employee, target_date):
         """
-        The hours the day's approved time off runs between, as local hours.
+        The hours each of the day's approved leaves runs between, as local
+        hours on the employee's own clock, as a list of (from, to).
 
-        A leave booked by the hour says so itself. One booked by the day says
-        nothing about hours, so it is read as covering the employee's whole
-        working window - the First Check-in and Last Check-out on his Working
-        Schedule - which is the day it stands in for.
+        Every approved leave covering the day counts, the Overtime Request
+        type included: the day is being described here, not paid for. A leave
+        still waiting for approval, or refused, is not the employee's day and
+        does not count.
+
+        A leave booked by the hour says its hours itself. One booked by the
+        day carries them on its own start and end, so those are read and used
+        for every day it covers - a leave that runs 9:00 to 17:00 is eight
+        hours on each of its days, not twenty-four on the ones in the middle.
+
+        This is the one place the day's time off is read. The First Check-in,
+        the Last Check-out and the Activities Hours all come from it, so they
+        can never tell different stories about the same leave.
         """
-        leaves = self.env['hr.overtime']._get_approved_leaves(employee, target_date)
+        leaves = self.env['hr.leave'].sudo().search([
+            ('employee_id',       '=',  employee.id),
+            ('request_date_from', '<=', target_date),
+            ('request_date_to',   '>=', target_date),
+            ('state',             '=',  'validate'),
+        ])
         if not leaves:
-            return 0.0, 0.0
+            return []
 
-        cal      = employee.resource_calendar_id
-        day_from = cal.first_check_in if cal and cal.first_check_in else 0.0
-        day_to   = cal.last_check_out if cal and cal.last_check_out else 0.0
-
-        first, last = 0.0, 0.0
+        tz = employee_tz(employee)
+        intervals = []
         for leave in leaves:
             hour_from = hour_to = 0.0
+
             if getattr(leave, 'request_unit_hours', False):
                 try:
                     hour_from = float(leave.request_hour_from or 0.0)
                     hour_to   = float(leave.request_hour_to   or 0.0)
                 except (TypeError, ValueError):
                     hour_from = hour_to = 0.0
-            if hour_to <= hour_from:
-                hour_from, hour_to = day_from, day_to
-            if hour_to <= hour_from:
-                continue
-            first = hour_from if not first else min(first, hour_from)
-            last  = max(last, hour_to)
-        return first, last
+
+            if hour_to <= hour_from and leave.date_from and leave.date_to:
+                hour_from = local_hour(leave.date_from, tz)
+                hour_to   = local_hour(leave.date_to,   tz)
+
+            if hour_to > hour_from:
+                intervals.append((hour_from, hour_to))
+        return intervals
+
+    @api.model
+    def _leave_bounds(self, employee, target_date):
+        """The first hour the day's time off starts and the last it runs to."""
+        intervals = self._leave_intervals(employee, target_date)
+        if not intervals:
+            return 0.0, 0.0
+        return min(i[0] for i in intervals), max(i[1] for i in intervals)
 
     @api.model
     def _attendance_bounds(self, employee, target_date):
@@ -269,8 +291,13 @@ class AttendanceReport(models.Model):
 
     @api.model
     def _activities_hours(self, employee, target_date):
-        """The hours of approved time off covering the day, added up."""
-        return self.env['hr.overtime']._get_approved_time_off_for(employee, target_date)
+        """
+        The hours of approved time off covering the day, added up: each leave
+        measured from where it starts to where it ends, the same reading the
+        First Check-in and the Last Check-out are taken from.
+        """
+        return sum(end - start
+                   for start, end in self._leave_intervals(employee, target_date))
 
     @api.model
     def _hours_per_day(self, employee):
@@ -409,17 +436,21 @@ class AttendanceReport(models.Model):
         """
         Work the day's figures out again on every row.
 
-        The First Check-in and the Last Check-out are new columns and are
-        filled for the rows already there, but Late Minutes and Early Leave
-        Minutes are not: they are columns that already hold a value, worked out
-        under the old rule, and a stored column keeps whatever it was last
-        given.
+        A stored column keeps whatever it was last given, and Odoo only fills
+        one it has just added. Every column here has been worked out under a
+        rule that has since changed, on a database that may already carry an
+        earlier version of it, so they are all asked for again rather than
+        guessed at.
         """
         try:
             rows = self.sudo().search([])
             if not rows:
                 return
-            for name in ('late_minutes', 'early_leave_minutes'):
+            for name in ('first_check_in', 'last_check_out',
+                         'late_minutes', 'early_leave_minutes',
+                         'attendance_hours', 'activities_hours',
+                         'total_recorded_hours', 'difference',
+                         'deduction_state'):
                 self.env.add_to_compute(self._fields[name], rows)
             rows.flush_recordset()
         except Exception:
