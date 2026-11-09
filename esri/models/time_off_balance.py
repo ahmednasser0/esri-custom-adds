@@ -191,6 +191,14 @@ class TimeOffBalance(models.Model):
                 'description':    record.name or False,
             })
 
+        # A record from before the reports begin gets no line, the same way the
+        # daily reports open no row for such a day. A line already written is
+        # left to _sync_records, which drops it when nothing stands for it.
+        start = values.get('start_date')
+        if start and not self.env['esri.config'].covers_date(
+                fields.Date.to_date(start)):
+            return None
+
         # The column reads as a movement, not as a quantity: an allocation puts
         # days in and counts up, time off and a deduction take them out and
         # count down. The source always reports its own figure as a positive

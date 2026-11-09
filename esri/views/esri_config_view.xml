@@ -29,6 +29,7 @@
                             <field name="absence_deduction_rate"/>
                         </group>
                         <group string="Reports">
+                            <field name="reports_start_date"/>
                             <field name="annual_leave_type_id" options="{'no_create': True}"/>
                             <field name="monthly_permission_type_id" options="{'no_create': True}"/>
                         </group>
@@ -45,6 +46,10 @@
             <field name="state">code</field>
             <field name="code">config = env['esri.config'].get_config(); action = config.get_formview_action(); action.update({'target': 'current'})</field>
         </record>
+
+        <!-- Fixes the first day the reports cover, the first time the module
+             is installed. It never overwrites a date set by hand. -->
+        <function model="esri.config" name="_set_reports_start_date"/>
 
         <menuitem
             id="esri_config_menu"

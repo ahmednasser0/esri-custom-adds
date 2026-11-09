@@ -768,6 +768,11 @@ class Overtime(models.Model):
             ('date',        '=', target_date),
         ], limit=1)
 
+        # A day from before the reports begin is left alone: a record already
+        # there is still refreshed, but no new one is opened for it.
+        if not existing and not self.env['esri.config'].covers_date(target_date):
+            return OT.browse()
+
         emp      = self.env['hr.employee'].sudo().browse(employee_id)
         overtime = self._compute_overtime_hours_for_employee(emp, target_date)
 

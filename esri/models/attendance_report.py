@@ -400,6 +400,16 @@ class AttendanceReport(models.Model):
     @api.model
     def _ensure_record(self, employee_id, target_date):
         """Create the (employee, date) row, or refresh the one already there."""
+        # A day from before the reports begin is left alone: a row already
+        # there is still refreshed, but no new one is opened for it.
+        if not self.env['esri.config'].covers_date(target_date):
+            existing = self.sudo().search([
+                ('employee_id', '=', employee_id),
+                ('date',        '=', target_date),
+            ], limit=1)
+            if not existing:
+                return self.sudo().browse()
+
         existing = self.sudo().search([
             ('employee_id', '=', employee_id),
             ('date',        '=', target_date),

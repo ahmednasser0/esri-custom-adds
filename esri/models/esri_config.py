@@ -1,4 +1,8 @@
+import logging
+
 from odoo import models, fields, api
+
+_logger = logging.getLogger(__name__)
 
 
 class EsriConfig(models.Model):
@@ -58,6 +62,11 @@ class EsriConfig(models.Model):
         help="The time-off type used as an additional authorization for staff and office assistant",
     )
 
+    reports_start_date = fields.Date(
+        string='Reports Start Date',
+        help="The first day the daily records cover. Nothing is written for a day before it, by the nightly job or by a later change to an old day, so the reports begin where the module did rather than reaching back over everything already in the database. It is set to the day the module was installed and can be moved",
+    )
+
     annual_leave_type_id = fields.Many2one(
         'hr.leave.type',
         string='Annual Leave Time Off Type',
@@ -104,6 +113,44 @@ class EsriConfig(models.Model):
         required=True,
         help="The day is calculated as a decimal value The deduction rate applied to daily working hours for unauthorized absence. For example, 1.25 represents a one-and-a-quarter-day deduction",
     )
+
+    @api.model
+    def reports_start(self):
+        """The first day the daily records cover, or False when none is set."""
+        return self.sudo().get_config().reports_start_date or False
+
+    @api.model
+    def covers_date(self, target_date):
+        """
+        True when a daily record may be written for target_date.
+
+        Every report asks this before creating a row, so that a change to a day
+        from before the module was running refreshes a row that is already
+        there and writes no new one. A day already recorded is never refused:
+        the question is only whether to begin covering a new one.
+        """
+        if not target_date:
+            return False
+        start = self.reports_start()
+        if not start:
+            return True
+        return target_date >= start
+
+    @api.model
+    def _set_reports_start_date(self):
+        """
+        Fix the first day the reports cover, once.
+
+        Run on install and on every upgrade, it only ever fills the field when
+        it is empty, so the reports begin the day the module arrived and a date
+        set by hand afterwards is left alone.
+        """
+        try:
+            config = self.sudo().get_config()
+            if not config.reports_start_date:
+                config.reports_start_date = fields.Date.context_today(config)
+        except Exception:
+            _logger.warning("Could not set the Reports Start Date", exc_info=True)
 
     @api.model
     def get_config(self):
