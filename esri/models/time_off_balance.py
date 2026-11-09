@@ -45,7 +45,7 @@ class TimeOffBalance(models.Model):
     )
     number_of_days = fields.Float(
         string='Number of Days',
-        help="The days the line is worth, taken from the source record",
+        help="The days the line moves: an allocation adds them and counts up, while time off and a deduction take them away and count down",
     )
     status = fields.Char(
         string='Status',
@@ -132,13 +132,19 @@ class TimeOffBalance(models.Model):
         }
 
         if source == 'deduction':
+            days = record.deducted_days or 0.0
+            # A day that was never deducted has nothing to say here, so no line
+            # stands for it; one that had a line and no longer deducts anything
+            # loses it, because _sync_records drops a line left with nothing.
+            if not days:
+                return None
             # A deduction is a single day, so it has a start and no end, and it
             # is counted against the configured annual leave type.
             values.update({
                 'leave_type_id':  self._annual_leave_type().id or False,
                 'start_date':     record.date or False,
                 'end_date':       False,
-                'number_of_days': record.deducted_days or 0.0,
+                'number_of_days': days,
                 'description':    record.description or False,
             })
         else:
@@ -150,6 +156,13 @@ class TimeOffBalance(models.Model):
                     record, ('number_of_days_display', 'number_of_days')) or 0.0,
                 'description':    record.name or False,
             })
+
+        # The column reads as a movement, not as a quantity: an allocation puts
+        # days in and counts up, time off and a deduction take them out and
+        # count down. The source always reports its own figure as a positive
+        # number, so the sign is put on here rather than relied on.
+        days = abs(values.get('number_of_days') or 0.0)
+        values['number_of_days'] = days if source == 'allocation' else -days
 
         return values
 
