@@ -64,7 +64,7 @@ class EsriConfig(models.Model):
 
     reports_start_date = fields.Date(
         string='Reports Start Date',
-        help="The first day the daily records cover. Nothing is written for a day before it, by the nightly job or by a later change to an old day, so the reports begin where the module did rather than reaching back over everything already in the database. It is set to the day the module was installed and can be moved",
+        help="The first day the daily records cover. Nothing is written for a day before it, nor for a day still to come, by the nightly job or by a later change, so the reports run from where the module began up to today. It is set to the day the module was installed and can be moved",
     )
 
     annual_leave_type_id = fields.Many2one(
@@ -124,12 +124,19 @@ class EsriConfig(models.Model):
         """
         True when a daily record may be written for target_date.
 
+        The records run from the Reports Start Date up to today and no
+        further. Before it the module was not running, and a day that has not
+        happened yet has nothing to report: an empty attendance there would
+        read as a full day's absence and be charged for it.
+
         Every report asks this before creating a row, so that a change to a day
-        from before the module was running refreshes a row that is already
-        there and writes no new one. A day already recorded is never refused:
-        the question is only whether to begin covering a new one.
+        outside that stretch refreshes a row already there and writes no new
+        one. A day already recorded is never refused: the question is only
+        whether to begin covering a new one.
         """
         if not target_date:
+            return False
+        if target_date > fields.Date.context_today(self):
             return False
         start = self.reports_start()
         if not start:
