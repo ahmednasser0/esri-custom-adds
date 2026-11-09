@@ -84,7 +84,7 @@ class AttendanceReport(models.Model):
     difference = fields.Float(
         string='Difference',
         compute='_compute_values', store=True,
-        help="The day's work hours less the Total Recorded Hours. A positive figure is what the day is short; a negative one is time over and above it",
+        help="The day's work hours less the Total Recorded Hours: what the day is short. A day recorded past its hours reads zero",
     )
     deduction_state = fields.Selection(
         [
@@ -395,7 +395,9 @@ class AttendanceReport(models.Model):
             rec.total_recorded_hours = rec.attendance_hours + rec.activities_hours
             cal = employee.resource_calendar_id
             hpd = cal.daily_work_hours if cal and cal.daily_work_hours else 8.0
-            rec.difference = hpd - rec.total_recorded_hours
+            # A day recorded past its hours owes nothing, so the difference
+            # stops at zero rather than turning into time in hand.
+            rec.difference = max(hpd - rec.total_recorded_hours, 0.0)
 
             rec.monthly_permission = self._balance_hours(employee, permission_type, day)
             rec.late_minutes, rec.early_leave_minutes = self._late_and_early(
