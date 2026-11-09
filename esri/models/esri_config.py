@@ -62,10 +62,6 @@ class EsriConfig(models.Model):
         help="The time-off type used as an additional authorization for staff and office assistant",
     )
 
-    reports_start_date = fields.Date(
-        string='Reports Start Date',
-        help="The first day the daily records cover. Nothing is written for a day before it, nor for a day still to come, by the nightly job or by a later change, so the reports run from where the module began up to today. It is set to the day the module was installed and can be moved",
-    )
 
     annual_leave_type_id = fields.Many2one(
         'hr.leave.type',
@@ -115,33 +111,23 @@ class EsriConfig(models.Model):
     )
 
     @api.model
-    def reports_start(self):
-        """The first day the daily records cover, or False when none is set."""
-        return self.sudo().get_config().reports_start_date or False
-
-    @api.model
     def covers_date(self, target_date):
         """
         True when a daily record may be written for target_date.
 
-        The records run from the Reports Start Date up to today and no
-        further. Before it the module was not running, and a day that has not
-        happened yet has nothing to report: an empty attendance there would
-        read as a full day's absence and be charged for it.
+        The records stop at today. A day already past can always be recorded,
+        however long ago it was, but a day that has not happened yet has
+        nothing to report: an empty attendance there would read as a full
+        day's absence and be charged for one.
 
-        Every report asks this before creating a row, so that a change to a day
-        outside that stretch refreshes a row already there and writes no new
-        one. A day already recorded is never refused: the question is only
-        whether to begin covering a new one.
+        Every report asks this before creating a row, so that a change
+        reaching into days still to come refreshes a row already there and
+        writes no new one. A day already recorded is never refused: the
+        question is only whether to begin covering a new one.
         """
         if not target_date:
             return False
-        if target_date > fields.Date.context_today(self):
-            return False
-        start = self.reports_start()
-        if not start:
-            return True
-        return target_date >= start
+        return target_date <= fields.Date.context_today(self)
 
     # The daily records and the column each one dates itself by.
     _DAILY_RECORD_TABLES = (
@@ -153,45 +139,27 @@ class EsriConfig(models.Model):
     )
 
     @api.model
-    def _purge_out_of_range_records(self):
+    def _purge_future_records(self):
         """
-        Clear out every daily record from outside the stretch the reports run
-        over: anything dated before the module began, and anything dated after
-        today.
+        Clear out every daily record dated after today.
+
+        Approving leave that runs into next month used to open a row for each
+        of its days, and such a row reports a day nobody has worked yet.
 
         Plain SQL, because deleting one of these through the ORM builds it
         again - that is how a stale figure is forced to be worked out afresh -
         and here the row is meant to go. Each table goes in its own savepoint,
         so one that cannot be read leaves the others done.
         """
-        start = self.reports_start()
+        today = fields.Date.context_today(self)
         for table, column in self._DAILY_RECORD_TABLES:
             try:
                 with self.env.cr.savepoint():
                     self.env.cr.execute(
-                        f"DELETE FROM {table} WHERE {column} > %s", (fields.Date.context_today(self),))
-                    if start:
-                        self.env.cr.execute(
-                            f"DELETE FROM {table} WHERE {column} < %s", (start,))
+                        f"DELETE FROM {table} WHERE {column} > %s", (today,))
             except Exception:
-                _logger.warning("Could not clear the out of range rows of %s",
+                _logger.warning("Could not clear the future rows of %s",
                                 table, exc_info=True)
-
-    @api.model
-    def _set_reports_start_date(self):
-        """
-        Fix the first day the reports cover, once.
-
-        Run on install and on every upgrade, it only ever fills the field when
-        it is empty, so the reports begin the day the module arrived and a date
-        set by hand afterwards is left alone.
-        """
-        try:
-            config = self.sudo().get_config()
-            if not config.reports_start_date:
-                config.reports_start_date = fields.Date.context_today(config)
-        except Exception:
-            _logger.warning("Could not set the Reports Start Date", exc_info=True)
 
     @api.model
     def get_config(self):

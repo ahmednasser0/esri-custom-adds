@@ -46,11 +46,9 @@
             <field name="code">config = env['esri.config'].get_config(); action = config.get_formview_action(); action.update({'target': 'current'})</field>
         </record>
 
-        <!-- Fixes the first day the reports cover, the first time the module
-             is installed, and clears out anything recorded outside the stretch
-             the reports run over. -->
-        <function model="esri.config" name="_set_reports_start_date"/>
-        <function model="esri.config" name="_purge_out_of_range_records"/>
+        <!-- Clears out any daily record dated after today, which earlier
+             versions wrote when leave reaching into the future was approved. -->
+        <function model="esri.config" name="_purge_future_records"/>
 
         <menuitem
             id="esri_config_menu"
