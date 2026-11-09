@@ -29,7 +29,6 @@
                             <field name="absence_deduction_rate"/>
                         </group>
                         <group string="Reports">
-                            <field name="reports_start_date"/>
                             <field name="annual_leave_type_id" options="{'no_create': True}"/>
                             <field name="monthly_permission_type_id" options="{'no_create': True}"/>
                         </group>
@@ -48,8 +47,10 @@
         </record>
 
         <!-- Fixes the first day the reports cover, the first time the module
-             is installed. It never overwrites a date set by hand. -->
+             is installed, and clears out anything recorded outside the stretch
+             the reports run over. -->
         <function model="esri.config" name="_set_reports_start_date"/>
+        <function model="esri.config" name="_purge_out_of_range_records"/>
 
         <menuitem
             id="esri_config_menu"

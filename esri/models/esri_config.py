@@ -143,6 +143,40 @@ class EsriConfig(models.Model):
             return True
         return target_date >= start
 
+    # The daily records and the column each one dates itself by.
+    _DAILY_RECORD_TABLES = (
+        ('attendance_report', 'date'),
+        ('deduction',         'date'),
+        ('daily_report',      'date'),
+        ('hr_overtime',       'date'),
+        ('time_off_balance',  'start_date'),
+    )
+
+    @api.model
+    def _purge_out_of_range_records(self):
+        """
+        Clear out every daily record from outside the stretch the reports run
+        over: anything dated before the module began, and anything dated after
+        today.
+
+        Plain SQL, because deleting one of these through the ORM builds it
+        again - that is how a stale figure is forced to be worked out afresh -
+        and here the row is meant to go. Each table goes in its own savepoint,
+        so one that cannot be read leaves the others done.
+        """
+        start = self.reports_start()
+        for table, column in self._DAILY_RECORD_TABLES:
+            try:
+                with self.env.cr.savepoint():
+                    self.env.cr.execute(
+                        f"DELETE FROM {table} WHERE {column} > %s", (fields.Date.context_today(self),))
+                    if start:
+                        self.env.cr.execute(
+                            f"DELETE FROM {table} WHERE {column} < %s", (start,))
+            except Exception:
+                _logger.warning("Could not clear the out of range rows of %s",
+                                table, exc_info=True)
+
     @api.model
     def _set_reports_start_date(self):
         """
