@@ -16,8 +16,14 @@
                 <field name="worked_hours" widget="float_time" sum="Total Worked"/>
                 <field name="late_minutes" widget="float_time" optional="show"/>
                 <field name="early_leave_minutes" widget="float_time" optional="show"/>
+                <field name="attendance_hours" widget="float_time" optional="show" sum="Total Attendance"/>
+                <field name="activities_hours" widget="float_time" optional="show" sum="Total Activities"/>
+                <field name="total_recorded_hours" widget="float_time" optional="show" sum="Total Recorded"/>
+                <field name="difference" widget="float_time" optional="show"/>
                 <field name="daily_check" widget="float_time"/>
                 <field name="deduction" widget="float_time" sum="Total Deduction"/>
+                <field name="deduction_state" widget="badge" optional="hide"
+                       decoration-muted="deduction_state == 'archived'"/>
                 <field name="monthly_permission" widget="float_time"/>
                 <field name="comment"/>
             </list>
@@ -49,8 +55,13 @@
                             <field name="early_leave_minutes" widget="float_time"/>
                         </group>
                         <group string="Deduction">
+                            <field name="attendance_hours" widget="float_time"/>
+                            <field name="activities_hours" widget="float_time"/>
+                            <field name="total_recorded_hours" widget="float_time"/>
+                            <field name="difference" widget="float_time"/>
                             <field name="daily_check" widget="float_time"/>
                             <field name="deduction" widget="float_time"/>
+                            <field name="deduction_state"/>
                         </group>
                     </group>
                     <notebook>
@@ -95,6 +106,7 @@
                 <filter name="filter_has_deduction" string="Has Deduction" domain="[('deduction', '>', 0)]"/>
                 <filter name="filter_late" string="Late" domain="[('late_minutes', '>', 0)]"/>
                 <filter name="filter_early_leave" string="Left Early" domain="[('early_leave_minutes', '>', 0)]"/>
+                <filter name="filter_short_day" string="Short Day" domain="[('difference', '>', 0)]"/>
                 <separator/>
                 <filter name="filter_date" string="Date" date="date"/>
                 <group>
@@ -102,6 +114,7 @@
                     <filter name="group_by_department" string="Department" context="{'group_by': 'department_id'}"/>
                     <filter name="group_by_date" string="Date" context="{'group_by': 'date'}"/>
                     <filter name="group_by_comment" string="Day Type" context="{'group_by': 'comment'}"/>
+                    <filter name="group_by_deduction_state" string="Deduction Status" context="{'group_by': 'deduction_state'}"/>
                 </group>
             </search>
         </field>

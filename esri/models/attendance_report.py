@@ -66,6 +66,35 @@ class AttendanceReport(models.Model):
         compute='_compute_values', store=True,
         help="The day's worked hours as the Attendances app records them: check-in to check-out, with nothing clipped, capped, or added for time off",
     )
+    attendance_hours = fields.Float(
+        string='Attendance Hours',
+        compute='_compute_values', store=True,
+        help="The time the employee was actually clocked in for: the latest check-out less the earliest check-in, with no time off in it",
+    )
+    activities_hours = fields.Float(
+        string='Activities Hours',
+        compute='_compute_values', store=True,
+        help="The hours of approved time off covering this day, added up",
+    )
+    total_recorded_hours = fields.Float(
+        string='Total Recorded Hours',
+        compute='_compute_values', store=True,
+        help="The Attendance Hours and the Activities Hours together: everything the day has on record",
+    )
+    difference = fields.Float(
+        string='Difference',
+        compute='_compute_values', store=True,
+        help="The day's work hours less the Total Recorded Hours. A positive figure is what the day is short; a negative one is time over and above it",
+    )
+    deduction_state = fields.Selection(
+        [
+            ('draft',    'Draft'),
+            ('archived', 'Archived'),
+        ],
+        string='Deduction Status',
+        compute='_compute_values', store=True,
+        help="The status of this day's deduction record, where there is one",
+    )
     daily_check = fields.Float(
         string='Daily Check',
         compute='_compute_values', store=True,
@@ -98,6 +127,27 @@ class AttendanceReport(models.Model):
     )
 
     # ─── Helpers ─────────────────────────────────────────────────────────────
+
+    @api.model
+    def _punch_bounds(self, employee, target_date):
+        """
+        The earliest check-in and the latest check-out of the day, as local
+        hours, from the attendance alone. Nothing but the clock: no time off.
+        """
+        atts = self.env['hr.attendance'].sudo().search([
+            ('employee_id',     '=', employee.id),
+            ('attendance_date', '=', target_date),
+        ])
+        tz = employee_tz(employee)
+
+        first_in, last_out = 0.0, 0.0
+        for att in atts:
+            if att.check_in:
+                hour = local_hour(att.check_in, tz)
+                first_in = hour if not first_in else min(first_in, hour)
+            if att.check_out:
+                last_out = max(last_out, local_hour(att.check_out, tz))
+        return first_in, last_out
 
     @api.model
     def _leave_bounds(self, employee, target_date):
@@ -145,20 +195,7 @@ class AttendanceReport(models.Model):
         leave. Either side on its own answers for the whole day when it is the
         only one there.
         """
-        atts = self.env['hr.attendance'].sudo().search([
-            ('employee_id',     '=', employee.id),
-            ('attendance_date', '=', target_date),
-        ])
-        tz = employee_tz(employee)
-
-        first_in, last_out = 0.0, 0.0
-        for att in atts:
-            if att.check_in:
-                hour = local_hour(att.check_in, tz)
-                first_in = hour if not first_in else min(first_in, hour)
-            if att.check_out:
-                last_out = max(last_out, local_hour(att.check_out, tz))
-
+        first_in, last_out = self._punch_bounds(employee, target_date)
         leave_from, leave_to = self._leave_bounds(employee, target_date)
         if leave_from:
             first_in = leave_from if not first_in else min(first_in, leave_from)
@@ -221,14 +258,19 @@ class AttendanceReport(models.Model):
 
     @api.model
     def _deduction_figures(self, employee, target_date):
-        """(daily_check, deduction) from the day's deduction record."""
+        """(daily_check, deduction, state) from the day's deduction record."""
         record = self.env['deduction'].sudo().search([
             ('employee_id', '=', employee.id),
             ('date',        '=', target_date),
         ], limit=1)
         if not record:
-            return 0.0, 0.0
-        return record.daily_check or 0.0, record.deduction or 0.0
+            return 0.0, 0.0, False
+        return record.daily_check or 0.0, record.deduction or 0.0, record.state or False
+
+    @api.model
+    def _activities_hours(self, employee, target_date):
+        """The hours of approved time off covering the day, added up."""
+        return self.env['hr.overtime']._get_approved_time_off_for(employee, target_date)
 
     @api.model
     def _hours_per_day(self, employee):
@@ -304,6 +346,9 @@ class AttendanceReport(models.Model):
                 rec.first_check_in = rec.last_check_out = 0.0
                 rec.worked_hours = 0.0
                 rec.daily_check = rec.deduction = 0.0
+                rec.attendance_hours = rec.activities_hours = 0.0
+                rec.total_recorded_hours = rec.difference = 0.0
+                rec.deduction_state = False
                 rec.monthly_permission = 0.0
                 rec.late_minutes = rec.early_leave_minutes = 0.0
                 rec.comment = False
@@ -314,7 +359,17 @@ class AttendanceReport(models.Model):
             rec.first_check_in, rec.last_check_out = self._attendance_bounds(employee, day)
 
             rec.worked_hours = self._worked_hours(employee, day)
-            rec.daily_check, rec.deduction = self._deduction_figures(employee, day)
+            (rec.daily_check, rec.deduction,
+             rec.deduction_state) = self._deduction_figures(employee, day)
+
+            punch_in, punch_out = self._punch_bounds(employee, day)
+            rec.attendance_hours = max(punch_out - punch_in, 0.0) if punch_in and punch_out else 0.0
+            rec.activities_hours = self._activities_hours(employee, day)
+            rec.total_recorded_hours = rec.attendance_hours + rec.activities_hours
+            cal = employee.resource_calendar_id
+            hpd = cal.daily_work_hours if cal and cal.daily_work_hours else 8.0
+            rec.difference = hpd - rec.total_recorded_hours
+
             rec.monthly_permission = self._balance_hours(employee, permission_type, day)
             rec.late_minutes, rec.early_leave_minutes = self._late_and_early(
                 employee, rec.first_check_in, rec.last_check_out)
