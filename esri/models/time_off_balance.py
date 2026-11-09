@@ -112,6 +112,34 @@ class TimeOffBalance(models.Model):
         return False
 
     @api.model
+    def _daily_work_hours(self, employee):
+        """The employee's full working day, from his Working Schedule."""
+        cal = employee.resource_calendar_id
+        return (cal.daily_work_hours if cal and cal.daily_work_hours else 0.0) or 8.0
+
+    @api.model
+    def _leave_days(self, leave, employee):
+        """
+        A leave counted in days of the employee's own working day.
+
+        The hours the leave actually takes are what is known about it; the
+        Working Schedule's Daily Work Hours say what a day is worth. Two hours
+        off against an eight hour day is a quarter of a day, whatever the leave
+        was booked in. Odoo's own day count is not used: it is worked out
+        against the calendar's own idea of a day, which is not the one the rest
+        of this module measures by.
+        """
+        hours = self._first_value(
+            leave, ('number_of_hours', 'number_of_hours_display')) or 0.0
+        try:
+            hours = float(hours)
+        except (TypeError, ValueError):
+            hours = 0.0
+        if not hours:
+            return 0.0
+        return hours / self._daily_work_hours(employee)
+
+    @api.model
     def _line_values(self, record):
         """The balance line for one source record, or None when there is none."""
         model = record._name
@@ -148,12 +176,18 @@ class TimeOffBalance(models.Model):
                 'description':    record.description or False,
             })
         else:
+            if source == 'time_off':
+                # Time off is counted in the employee's own working days: the
+                # hours it takes over the hours his day is worth.
+                days = self._leave_days(record, employee)
+            else:
+                days = self._first_value(
+                    record, ('number_of_days_display', 'number_of_days')) or 0.0
             values.update({
                 'leave_type_id':  record.holiday_status_id.id or False,
                 'start_date':     self._first_value(record, ('date_from', 'start_date')),
                 'end_date':       self._first_value(record, ('date_to', 'end_date')),
-                'number_of_days': self._first_value(
-                    record, ('number_of_days_display', 'number_of_days')) or 0.0,
+                'number_of_days': days,
                 'description':    record.name or False,
             })
 
