@@ -35,6 +35,16 @@ class AttendanceReport(models.Model):
     # the holiday calendar - are reached by search() and so are invisible to
     # the dependency graph; _ensure_record calls the compute directly, and runs
     # on every path that can change the day.
+    check_in = fields.Float(
+        string='Check-in',
+        compute='_compute_values', store=True,
+        help="The earliest check-in of the day on the employee's own clock, from the attendance alone",
+    )
+    check_out = fields.Float(
+        string='Check-out',
+        compute='_compute_values', store=True,
+        help="The latest check-out of the day on the employee's own clock, from the attendance alone",
+    )
     first_check_in = fields.Float(
         string='First Check-in',
         compute='_compute_values', store=True,
@@ -60,11 +70,6 @@ class AttendanceReport(models.Model):
         string='Time Off',
         compute='_compute_leave_ids',
         help="The employee's time off covering this day, whatever its status",
-    )
-    worked_hours = fields.Float(
-        string='Worked Hours',
-        compute='_compute_values', store=True,
-        help="The day's worked hours as the Attendances app records them: check-in to check-out, with nothing clipped, capped, or added for time off",
     )
     attendance_hours = fields.Float(
         string='Attendance Hours',
@@ -106,7 +111,7 @@ class AttendanceReport(models.Model):
         help="The deduction recorded against this day, in hours",
     )
     monthly_permission = fields.Float(
-        string='Monthly Permission',
+        string='Permission Balance',
         compute='_compute_values', store=True,
         help="What is left of the configured monthly permission time off on this day, in hours",
     )
@@ -236,22 +241,6 @@ class AttendanceReport(models.Model):
         return 'working_day'
 
     @api.model
-    def _worked_hours(self, employee, target_date):
-        """
-        The day's worked hours straight from the Attendances app.
-
-        Every attendance on the day added up as Odoo itself measures each one,
-        check-in to check-out. Nothing of this module's own reading of the day
-        comes into it: no clipping at the first check-in, no cutoff, no cap,
-        and no approved time off.
-        """
-        atts = self.env['hr.attendance'].sudo().search([
-            ('employee_id',     '=', employee.id),
-            ('attendance_date', '=', target_date),
-        ])
-        return sum(atts.mapped('worked_hours'))
-
-    @api.model
     def _late_and_early(self, employee, first_check_in, last_check_out):
         """
         (late, early_leave) for the day, both in hours.
@@ -372,8 +361,8 @@ class AttendanceReport(models.Model):
 
         for rec in self:
             if not rec.employee_id or not rec.date:
+                rec.check_in = rec.check_out = 0.0
                 rec.first_check_in = rec.last_check_out = 0.0
-                rec.worked_hours = 0.0
                 rec.daily_check = rec.deduction = 0.0
                 rec.attendance_hours = rec.activities_hours = 0.0
                 rec.total_recorded_hours = rec.difference = 0.0
@@ -387,11 +376,11 @@ class AttendanceReport(models.Model):
 
             rec.first_check_in, rec.last_check_out = self._attendance_bounds(employee, day)
 
-            rec.worked_hours = self._worked_hours(employee, day)
             (rec.daily_check, rec.deduction,
              rec.deduction_state) = self._deduction_figures(employee, day)
 
             punch_in, punch_out = self._punch_bounds(employee, day)
+            rec.check_in, rec.check_out = punch_in, punch_out
             rec.attendance_hours = max(punch_out - punch_in, 0.0) if punch_in and punch_out else 0.0
             rec.activities_hours = self._activities_hours(employee, day)
             rec.total_recorded_hours = rec.attendance_hours + rec.activities_hours
@@ -450,7 +439,8 @@ class AttendanceReport(models.Model):
             rows = self.sudo().search([])
             if not rows:
                 return
-            for name in ('first_check_in', 'last_check_out',
+            for name in ('check_in', 'check_out',
+                         'first_check_in', 'last_check_out',
                          'late_minutes', 'early_leave_minutes',
                          'attendance_hours', 'activities_hours',
                          'total_recorded_hours', 'difference',
