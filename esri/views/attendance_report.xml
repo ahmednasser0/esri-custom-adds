@@ -66,7 +66,7 @@
                         </group>
                     </group>
                     <notebook>
-                        <page string="Time Off" name="time_off">
+                        <page string="Daily Activities" name="daily_activities">
                             <!-- Laid out like the Time Off list rather than
                                  pointed at it by xml id: Odoo moves those
                                  between versions and a missing one stops the

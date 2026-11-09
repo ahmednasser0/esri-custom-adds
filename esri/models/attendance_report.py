@@ -46,24 +46,24 @@ class AttendanceReport(models.Model):
         help="The latest check-out of the day on the employee's own clock, from the attendance alone",
     )
     first_check_in = fields.Float(
-        string='First Check-in',
+        string='First In',
         compute='_compute_values', store=True,
         help="The first the day starts, on the employee's own clock: the earliest check-in, or the hour his approved time off begins when that comes first",
     )
     last_check_out = fields.Float(
-        string='Last Check-out',
+        string='Last Out',
         compute='_compute_values', store=True,
         help="The last the day runs to, on the employee's own clock: the latest check-out, or the hour his approved time off ends when that comes later",
     )
     late_minutes = fields.Float(
         string='Late Minutes',
         compute='_compute_values', store=True,
-        help="How far the day's First Check-in fell past the Late Check-in Limit on the employee's Working Schedule, or zero when it did not",
+        help="How far the day's First In fell past the Late Check-in Limit on the employee's Working Schedule, or zero when it did not",
     )
     early_leave_minutes = fields.Float(
         string='Early Leave Minutes',
         compute='_compute_values', store=True,
-        help="The day's work hours less the time between the First Check-in and the Last Check-out and less the lateness: what is missing from the end of the day rather than the start of it",
+        help="The day's work hours less the time between the First In and the Last Out and less the lateness: what is missing from the end of the day rather than the start of it",
     )
     leave_ids = fields.Many2many(
         'hr.leave',
