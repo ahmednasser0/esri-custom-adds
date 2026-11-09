@@ -35,25 +35,25 @@ class AttendanceReport(models.Model):
     # the holiday calendar - are reached by search() and so are invisible to
     # the dependency graph; _ensure_record calls the compute directly, and runs
     # on every path that can change the day.
-    check_in = fields.Float(
-        string='Check-in',
+    first_check_in = fields.Float(
+        string='First Check-in',
         compute='_compute_values', store=True,
-        help="The first check-in of the day on the employee's own clock",
+        help="The first the day starts, on the employee's own clock: the earliest check-in, or the hour his approved time off begins when that comes first",
     )
-    check_out = fields.Float(
-        string='Check-out',
+    last_check_out = fields.Float(
+        string='Last Check-out',
         compute='_compute_values', store=True,
-        help="The last check-out of the day on the employee's own clock",
+        help="The last the day runs to, on the employee's own clock: the latest check-out, or the hour his approved time off ends when that comes later",
     )
     late_minutes = fields.Float(
         string='Late Minutes',
         compute='_compute_values', store=True,
-        help="How late the first check-in was against the Late Check-in Limit on the employee's working schedule, or zero when it was not late",
+        help="How far the day's First Check-in fell past the Late Check-in Limit on the employee's Working Schedule, or zero when it did not",
     )
     early_leave_minutes = fields.Float(
         string='Early Leave Minutes',
         compute='_compute_values', store=True,
-        help="The day's work hours less the hours worked and less the lateness: what is missing from the end of the day rather than the start of it",
+        help="The day's work hours less the time between the First Check-in and the Last Check-out and less the lateness: what is missing from the end of the day rather than the start of it",
     )
     leave_ids = fields.Many2many(
         'hr.leave',
@@ -100,8 +100,51 @@ class AttendanceReport(models.Model):
     # ─── Helpers ─────────────────────────────────────────────────────────────
 
     @api.model
+    def _leave_bounds(self, employee, target_date):
+        """
+        The hours the day's approved time off runs between, as local hours.
+
+        A leave booked by the hour says so itself. One booked by the day says
+        nothing about hours, so it is read as covering the employee's whole
+        working window - the First Check-in and Last Check-out on his Working
+        Schedule - which is the day it stands in for.
+        """
+        leaves = self.env['hr.overtime']._get_approved_leaves(employee, target_date)
+        if not leaves:
+            return 0.0, 0.0
+
+        cal      = employee.resource_calendar_id
+        day_from = cal.first_check_in if cal and cal.first_check_in else 0.0
+        day_to   = cal.last_check_out if cal and cal.last_check_out else 0.0
+
+        first, last = 0.0, 0.0
+        for leave in leaves:
+            hour_from = hour_to = 0.0
+            if getattr(leave, 'request_unit_hours', False):
+                try:
+                    hour_from = float(leave.request_hour_from or 0.0)
+                    hour_to   = float(leave.request_hour_to   or 0.0)
+                except (TypeError, ValueError):
+                    hour_from = hour_to = 0.0
+            if hour_to <= hour_from:
+                hour_from, hour_to = day_from, day_to
+            if hour_to <= hour_from:
+                continue
+            first = hour_from if not first else min(first, hour_from)
+            last  = max(last, hour_to)
+        return first, last
+
+    @api.model
     def _attendance_bounds(self, employee, target_date):
-        """First check-in and last check-out of the day, as local hours."""
+        """
+        The first the day starts and the last it runs to, as local hours.
+
+        The attendance and the approved time off are read together: a day that
+        begins with a morning's leave and is attended afterwards starts at the
+        leave, and one attended first and left on leave runs to the end of the
+        leave. Either side on its own answers for the whole day when it is the
+        only one there.
+        """
         atts = self.env['hr.attendance'].sudo().search([
             ('employee_id',     '=', employee.id),
             ('attendance_date', '=', target_date),
@@ -115,6 +158,13 @@ class AttendanceReport(models.Model):
                 first_in = hour if not first_in else min(first_in, hour)
             if att.check_out:
                 last_out = max(last_out, local_hour(att.check_out, tz))
+
+        leave_from, leave_to = self._leave_bounds(employee, target_date)
+        if leave_from:
+            first_in = leave_from if not first_in else min(first_in, leave_from)
+        if leave_to:
+            last_out = max(last_out, leave_to)
+
         return first_in, last_out
 
     @api.model
@@ -143,23 +193,30 @@ class AttendanceReport(models.Model):
         return sum(atts.mapped('worked_hours'))
 
     @api.model
-    def _late_and_early(self, employee, check_in, worked_hours):
+    def _late_and_early(self, employee, first_check_in, last_check_out):
         """
         (late, early_leave) for the day, both in hours.
 
-        Late is how far the first check-in fell past the Late Check-in Limit on
-        the employee's working schedule, and nothing at all when it did not.
-        Early leave is what the day still owes once the hours worked and the
-        lateness are taken off it - the shortfall at the end of the day rather
-        than at the start. Neither goes below zero: a day worked over is not a
-        day left early.
+        Late is how far the day's start fell past the Late Check-in Limit on
+        the employee's Working Schedule, and nothing at all when it did not.
+
+        Early leave is what the day still owes once the time between its start
+        and its end, and the lateness, are taken off the full working day: the
+        shortfall at the end of the day rather than at the start.
+
+        Neither goes below zero. A day that started early is not a day owed
+        back, and a day that ran over is not a day left early.
         """
         cal = employee.resource_calendar_id
         late_limit = cal.late_check_in_limit if cal and cal.late_check_in_limit else 11.0
         hpd        = cal.daily_work_hours    if cal and cal.daily_work_hours    else 8.0
 
-        late = max(check_in - late_limit, 0.0) if check_in else 0.0
-        early = max(hpd - worked_hours - late, 0.0)
+        late = max(first_check_in - late_limit, 0.0) if first_check_in else 0.0
+
+        span = last_check_out - first_check_in
+        if span < 0.0:
+            span = 0.0
+        early = max(hpd - span - late, 0.0)
         return late, early
 
     @api.model
@@ -244,7 +301,7 @@ class AttendanceReport(models.Model):
 
         for rec in self:
             if not rec.employee_id or not rec.date:
-                rec.check_in = rec.check_out = 0.0
+                rec.first_check_in = rec.last_check_out = 0.0
                 rec.worked_hours = 0.0
                 rec.daily_check = rec.deduction = 0.0
                 rec.monthly_permission = 0.0
@@ -254,13 +311,13 @@ class AttendanceReport(models.Model):
 
             employee, day = rec.employee_id, rec.date
 
-            rec.check_in, rec.check_out = self._attendance_bounds(employee, day)
+            rec.first_check_in, rec.last_check_out = self._attendance_bounds(employee, day)
 
             rec.worked_hours = self._worked_hours(employee, day)
             rec.daily_check, rec.deduction = self._deduction_figures(employee, day)
             rec.monthly_permission = self._balance_hours(employee, permission_type, day)
             rec.late_minutes, rec.early_leave_minutes = self._late_and_early(
-                employee, rec.check_in, rec.worked_hours)
+                employee, rec.first_check_in, rec.last_check_out)
             rec.comment = self._day_kind(employee, day)
 
     # ─── Daily record creation ───────────────────────────────────────────────
@@ -291,6 +348,28 @@ class AttendanceReport(models.Model):
     @api.model
     def _cron_create_reports(self):
         self._create_reports_for_date(date.today() - timedelta(days=1))
+
+    @api.model
+    def _recompute_day_figures(self):
+        """
+        Work the day's figures out again on every row.
+
+        The First Check-in and the Last Check-out are new columns and are
+        filled for the rows already there, but Late Minutes and Early Leave
+        Minutes are not: they are columns that already hold a value, worked out
+        under the old rule, and a stored column keeps whatever it was last
+        given.
+        """
+        try:
+            rows = self.sudo().search([])
+            if not rows:
+                return
+            for name in ('late_minutes', 'early_leave_minutes'):
+                self.env.add_to_compute(self._fields[name], rows)
+            rows.flush_recordset()
+        except Exception:
+            _logger.warning("Could not work the Attendance report's day "
+                            "figures out again", exc_info=True)
 
     @api.model
     def _refresh_employee_codes(self):

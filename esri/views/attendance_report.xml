@@ -11,8 +11,8 @@
                 <field name="employee_code"/>
                 <field name="date"/>
                 <field name="department_id"/>
-                <field name="check_in" widget="float_time"/>
-                <field name="check_out" widget="float_time"/>
+                <field name="first_check_in" widget="float_time"/>
+                <field name="last_check_out" widget="float_time"/>
                 <field name="worked_hours" widget="float_time" sum="Total Worked"/>
                 <field name="late_minutes" widget="float_time" optional="show"/>
                 <field name="early_leave_minutes" widget="float_time" optional="show"/>
@@ -39,8 +39,8 @@
                             <field name="comment"/>
                         </group>
                         <group string="Attendance">
-                            <field name="check_in" widget="float_time"/>
-                            <field name="check_out" widget="float_time"/>
+                            <field name="first_check_in" widget="float_time"/>
+                            <field name="last_check_out" widget="float_time"/>
                             <field name="worked_hours" widget="float_time"/>
                             <field name="monthly_permission" widget="float_time"/>
                         </group>
@@ -151,6 +151,7 @@
 
     <function model="attendance.report" name="_attach_to_employees_app"/>
     <function model="attendance.report" name="_refresh_employee_codes"/>
+    <function model="attendance.report" name="_recompute_day_figures"/>
 
     <!-- ─── Cron: create the attendance report rows ────────────────────── -->
     <record id="ir_cron_attendance_report" model="ir.cron">
