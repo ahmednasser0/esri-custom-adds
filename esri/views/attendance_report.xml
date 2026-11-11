@@ -26,6 +26,7 @@
                 <field name="deduction_state" widget="badge" optional="hide"
                        decoration-muted="deduction_state == 'archived'"/>
                 <field name="monthly_permission" widget="float_time"/>
+                <field name="time_off_balance" optional="show"/>
                 <field name="comment"/>
             </list>
         </field>
@@ -54,6 +55,7 @@
                             <field name="check_in" widget="float_time"/>
                             <field name="check_out" widget="float_time"/>
                             <field name="monthly_permission" widget="float_time"/>
+                            <field name="time_off_balance"/>
                             <field name="comment"/>
                         </group>
                         <group string="Deduction">

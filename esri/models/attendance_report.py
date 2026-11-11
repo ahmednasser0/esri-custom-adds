@@ -123,6 +123,13 @@ class AttendanceReport(models.Model):
         compute='_compute_values', store=True,
         help="What is left of the configured monthly permission time off on this day, in hours",
     )
+    time_off_balance = fields.Float(
+        string='Time Off Balance',
+        compute='_compute_time_off_balance',
+        aggregator=False,
+        digits=(16, 2),
+        help="The employee's balance in days at the end of this day: the Number of Days of every Time Off Balance line up to and including it added together, allocations in and time off and deductions out",
+    )
     comment = fields.Selection(
         [
             ('working_day',    'Working Day'),
@@ -348,6 +355,47 @@ class AttendanceReport(models.Model):
         return max(allocated - taken, 0.0)
 
     # ─── Compute ─────────────────────────────────────────────────────────────
+
+    @api.depends('employee_id', 'date')
+    def _compute_time_off_balance(self):
+        """
+        The running balance of the Time Off Balance report on each row's day.
+
+        Not stored on purpose. A leave approved today for a day last week moves
+        the balance of every row after it, and a stored figure would only be
+        put right on the day the change landed on. Worked out when it is read,
+        it is always the report's own sum.
+
+        One search covers every row on the screen: the lines of all their
+        employees up to the latest of their days, then added up per row in
+        Python, rather than a query for each row.
+        """
+        rows = self.filtered(lambda r: r.employee_id and r.date)
+        (self - rows).time_off_balance = 0.0
+        if not rows:
+            return
+
+        last_day = max(rows.mapped('date'))
+        lines = self.env['time.off.balance'].sudo().search_read(
+            [
+                ('employee_id', 'in', rows.employee_id.ids),
+                ('start_date',  '<', fields.Datetime.to_datetime(last_day + timedelta(days=1))),
+            ],
+            ['employee_id', 'start_date', 'number_of_days'],
+        )
+
+        by_employee = {}
+        for line in lines:
+            if not line['start_date']:
+                continue
+            by_employee.setdefault(line['employee_id'][0], []).append(
+                (line['start_date'].date(), line['number_of_days'] or 0.0))
+
+        for rec in rows:
+            rec.time_off_balance = sum(
+                days for day, days in by_employee.get(rec.employee_id.id, ())
+                if day <= rec.date
+            )
 
     @api.depends('employee_id', 'date')
     def _compute_leave_ids(self):
