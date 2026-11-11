@@ -38,11 +38,13 @@ class AttendanceReport(models.Model):
     check_in = fields.Float(
         string='Check-in',
         compute='_compute_values', store=True,
+        aggregator=False,
         help="The earliest check-in of the day on the employee's own clock, from the attendance alone",
     )
     check_out = fields.Float(
         string='Check-out',
         compute='_compute_values', store=True,
+        aggregator=False,
         help="The latest check-out of the day on the employee's own clock, from the attendance alone",
     )
     first_check_in = fields.Float(
@@ -56,13 +58,15 @@ class AttendanceReport(models.Model):
         help="The last the day runs to, on the employee's own clock: the latest check-out, or the hour his approved time off ends when that comes later",
     )
     late_minutes = fields.Float(
-        string='Late Minutes',
+        string='Late',
         compute='_compute_values', store=True,
+        aggregator=False,
         help="How far the day's First In fell past the Late Check-in Limit on the employee's Working Schedule, or zero when it did not",
     )
     early_leave_minutes = fields.Float(
-        string='Early Leave Minutes',
+        string='Early Leave',
         compute='_compute_values', store=True,
+        aggregator=False,
         help="The day's work hours less the time between the First In and the Last Out and less the lateness: what is missing from the end of the day rather than the start of it",
     )
     leave_ids = fields.Many2many(
@@ -89,6 +93,7 @@ class AttendanceReport(models.Model):
     difference = fields.Float(
         string='Difference',
         compute='_compute_values', store=True,
+        aggregator=False,
         help="The day's work hours less the Total Recorded Hours: what the day is short. A day recorded past its hours reads zero",
     )
     deduction_state = fields.Selection(
@@ -103,6 +108,7 @@ class AttendanceReport(models.Model):
     daily_check = fields.Float(
         string='Daily Check',
         compute='_compute_values', store=True,
+        aggregator=False,
         help="The hours missing from a full day",
     )
     deduction = fields.Float(
