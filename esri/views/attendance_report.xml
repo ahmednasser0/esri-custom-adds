@@ -19,7 +19,7 @@
                 <field name="early_leave_minutes" widget="float_time" optional="show"/>
                 <field name="attendance_hours" widget="float_time" optional="show" sum="Total Attendance"/>
                 <field name="activities_hours" widget="float_time" optional="show" sum="Total Activities"/>
-                <field name="total_recorded_hours" widget="float_time" optional="show" sum="Total Recorded"/>
+                <field name="total_recorded_hours" widget="float_time" optional="hide" sum="Total Recorded"/>
                 <field name="difference" widget="float_time" optional="show"/>
                 <field name="daily_check" widget="float_time" optional="hide"/>
                 <field name="deduction" widget="float_time" sum="Total Deduction"/>
