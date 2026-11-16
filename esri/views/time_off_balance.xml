@@ -56,7 +56,6 @@
             <pivot string="Time Off Balance">
                 <field name="employee_id" type="row"/>
                 <field name="source" type="col"/>
-                <field name="number_of_days" type="measure"/>
             </pivot>
         </field>
     </record>
