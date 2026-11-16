@@ -13,7 +13,7 @@
                 <field name="start_label"/>
                 <field name="start_date" optional="hide"/>
                 <field name="end_date"/>
-                <field name="number_of_days" sum="Total Days"/>
+                <field name="number_of_days"/>
                 <field name="status"/>
                 <field name="description" optional="show"/>
                 <field name="source"/>
