@@ -1,5 +1,6 @@
 import logging
 from odoo import fields, models, api
+from odoo.tools.misc import format_date, format_datetime
 
 _logger = logging.getLogger(__name__)
 
@@ -43,6 +44,11 @@ class TimeOffBalance(models.Model):
         string='End Date',
         help="When the time off or the allocation ends; a deduction line has none",
     )
+    start_label = fields.Char(
+        string='Start Date',
+        compute='_compute_start_label',
+        help="When the line starts, as it reads on screen: the day alone for a deduction, which covers a whole day and has no hour, and the day and the hour for anything else",
+    )
     number_of_days = fields.Float(
         string='Number of Days',
         help="The days the line moves: an allocation adds them and counts up, while time off and a deduction take them away and count down",
@@ -76,6 +82,23 @@ class TimeOffBalance(models.Model):
         'UNIQUE(source_model, source_res_id)',
         'A time off balance line already exists for this source record.',
     )
+
+    @api.depends('start_date', 'source')
+    @api.depends_context('tz', 'lang')
+    def _compute_start_label(self):
+        """
+        The start as it should read: a deduction is charged against a whole
+        day and was never given an hour, so it shows the day alone instead of
+        a midnight it does not mean. Everything else keeps its hour, in the
+        viewer's own timezone the way Odoo shows any date and time.
+        """
+        for rec in self:
+            if not rec.start_date:
+                rec.start_label = False
+            elif rec.source == 'deduction':
+                rec.start_label = format_date(rec.env, rec.start_date.date())
+            else:
+                rec.start_label = format_datetime(rec.env, rec.start_date)
 
     # ─── Reading one source record ───────────────────────────────────────────
 
