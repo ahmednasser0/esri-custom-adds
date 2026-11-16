@@ -80,7 +80,7 @@ class AttendanceReport(models.Model):
     attendance_hours = fields.Float(
         string='Attendance Hours',
         compute='_compute_values', store=True,
-        help="The time the employee was actually clocked in for: the latest check-out less the earliest check-in, with no time off in it",
+        help="The time the employee was actually clocked in for: the latest check-out, counted no later than the Last Check-out Time on the Working Schedule, less the earliest check-in, with no time off in it",
     )
     activities_hours = fields.Float(
         string='Activities Hours',
@@ -128,7 +128,7 @@ class AttendanceReport(models.Model):
         compute='_compute_time_off_balance',
         aggregator=False,
         digits=(16, 2),
-        help="The employee's balance in days at the end of this day: the Number of Days of every Time Off Balance line up to and including it added together, allocations in and time off and deductions out",
+        help="What is left of the employee's Regular Annual leave at the end of this day, in days: the Number of Days of every Regular Annual line in the Time Off Balance report up to and including it, allocations in and time off and deductions out",
     )
     comment = fields.Selection(
         [
@@ -356,6 +356,21 @@ class AttendanceReport(models.Model):
 
     # ─── Compute ─────────────────────────────────────────────────────────────
 
+    @api.model
+    def _annual_leave_type(self):
+        """
+        The Regular Annual leave type the balance column follows.
+
+        The Annual Leave Time Off Type in Esri Configurations when it is set,
+        which is also the type every deduction is counted against; failing
+        that, the leave type named Regular Annual.
+        """
+        leave_type = self.env['esri.config'].sudo().get_config().annual_leave_type_id
+        if leave_type:
+            return leave_type
+        return self.env['hr.leave.type'].sudo().search(
+            [('name', 'ilike', 'regular annual')], limit=1)
+
     @api.depends('employee_id', 'date')
     def _compute_time_off_balance(self):
         """
@@ -375,11 +390,17 @@ class AttendanceReport(models.Model):
         if not rows:
             return
 
+        leave_type = self._annual_leave_type()
+        if not leave_type:
+            rows.time_off_balance = 0.0
+            return
+
         last_day = max(rows.mapped('date'))
         lines = self.env['time.off.balance'].sudo().search_read(
             [
-                ('employee_id', 'in', rows.employee_id.ids),
-                ('start_date',  '<', fields.Datetime.to_datetime(last_day + timedelta(days=1))),
+                ('employee_id',   'in', rows.employee_id.ids),
+                ('leave_type_id', '=',  leave_type.id),
+                ('start_date',    '<',  fields.Datetime.to_datetime(last_day + timedelta(days=1))),
             ],
             ['employee_id', 'start_date', 'number_of_days'],
         )
@@ -435,13 +456,21 @@ class AttendanceReport(models.Model):
             (rec.daily_check, rec.deduction,
              rec.deduction_state) = self._deduction_figures(employee, day)
 
-            punch_in, punch_out = self._punch_bounds(employee, day)
-            rec.check_in, rec.check_out = punch_in, punch_out
-            rec.attendance_hours = max(punch_out - punch_in, 0.0) if punch_in and punch_out else 0.0
-            rec.activities_hours = self._activities_hours(employee, day)
-            rec.total_recorded_hours = rec.attendance_hours + rec.activities_hours
             cal = employee.resource_calendar_id
             hpd = cal.daily_work_hours if cal and cal.daily_work_hours else 8.0
+
+            punch_in, punch_out = self._punch_bounds(employee, day)
+            rec.check_in, rec.check_out = punch_in, punch_out
+            # The attendance is counted up to the Last Check-out Time on the
+            # Working Schedule and no further: time on the clock after it is
+            # not part of the working day this column measures.
+            counted_out = punch_out
+            if cal and cal.last_check_out:
+                counted_out = min(counted_out, cal.last_check_out)
+            rec.attendance_hours = (max(counted_out - punch_in, 0.0)
+                                    if punch_in and punch_out else 0.0)
+            rec.activities_hours = self._activities_hours(employee, day)
+            rec.total_recorded_hours = rec.attendance_hours + rec.activities_hours
             # A day recorded past its hours owes nothing, so the difference
             # stops at zero rather than turning into time in hand.
             rec.difference = max(hpd - rec.total_recorded_hours, 0.0)
@@ -450,6 +479,12 @@ class AttendanceReport(models.Model):
             rec.late_minutes, rec.early_leave_minutes = self._late_and_early(
                 employee, rec.first_check_in, rec.last_check_out)
             rec.comment = self._day_kind(employee, day)
+
+            # A weekend or a public holiday is not a working day, so nothing
+            # can be missing from it: no shortfall, and nobody left it early.
+            if rec.comment != 'working_day':
+                rec.difference = 0.0
+                rec.early_leave_minutes = 0.0
 
     # ─── Daily record creation ───────────────────────────────────────────────
 
