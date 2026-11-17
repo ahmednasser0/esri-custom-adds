@@ -98,11 +98,6 @@ class AttendanceReport(models.Model):
         aggregator=False,
         help="The day's work hours less the Total Recorded Hours: what the day is short. A day recorded past its hours reads zero",
     )
-    difference_details = fields.Text(
-        string='Difference Details',
-        compute='_compute_values', store=True,
-        help="Where the Difference comes from, in the day's own hours: the working day required, each stretch of attendance and time off counted against it, and the lateness or early leave behind what is missing. Empty when nothing is missing",
-    )
     deduction_state = fields.Selection(
         [
             ('draft',    'Draft'),
@@ -178,7 +173,7 @@ class AttendanceReport(models.Model):
     def _leave_intervals(self, employee, target_date):
         """
         The hours each of the day's approved leaves runs between, as local
-        hours on the employee's own clock, as a list of (from, to, leave).
+        hours on the employee's own clock, as a list of (from, to).
 
         Every approved leave covering the day counts, the Overtime Request
         type included: the day is being described here, not paid for. A leave
@@ -220,7 +215,7 @@ class AttendanceReport(models.Model):
                 hour_to   = local_hour(leave.date_to,   tz)
 
             if hour_to > hour_from:
-                intervals.append((hour_from, hour_to, leave))
+                intervals.append((hour_from, hour_to))
         return intervals
 
     @api.model
@@ -250,69 +245,6 @@ class AttendanceReport(models.Model):
             last_out = max(last_out, leave_to)
 
         return first_in, last_out
-
-    @staticmethod
-    def _hhmm(hours):
-        """A number of hours as H:MM, the way the float_time widget shows it."""
-        minutes = int(round((hours or 0.0) * 60))
-        sign = '-' if minutes < 0 else ''
-        minutes = abs(minutes)
-        return '%s%d:%02d' % (sign, minutes // 60, minutes % 60)
-
-    @api.model
-    def _difference_details(self, rec, cal, hpd, punch_in, punch_out, counted_out):
-        """
-        Where the row's Difference comes from, line by line, or False when the
-        day is short of nothing.
-
-        It is the Difference's own sum written out with the day's times in it:
-        the working day required, the attendance counted against it and the
-        stretch it ran over, each approved time off and its hours, what that
-        adds up to, and what is left. Lateness and early leave are named
-        beneath it when there is any, since they are usually why the day came
-        up short.
-        """
-        if not rec.difference:
-            return False
-
-        fmt = self._hhmm
-        lines = ['Required: %s' % fmt(hpd)]
-
-        if punch_in and punch_out:
-            att = 'Attendance: %s → %s = %s' % (
-                fmt(punch_in), fmt(punch_out), fmt(rec.attendance_hours))
-            if counted_out < punch_out:
-                att += ' (counted until %s, the Last Check-out Time)' % fmt(counted_out)
-            lines.append(att)
-        elif punch_in:
-            lines.append('Attendance: checked in at %s with no check-out = 0:00'
-                         % fmt(punch_in))
-        else:
-            lines.append('Attendance: none recorded = 0:00')
-
-        intervals = self._leave_intervals(rec.employee_id, rec.date)
-        if intervals:
-            for start, end, leave in intervals:
-                lines.append('Time Off: %s %s → %s = %s' % (
-                    leave.holiday_status_id.display_name or '',
-                    fmt(start), fmt(end), fmt(end - start)))
-        else:
-            lines.append('Time Off: none = 0:00')
-
-        lines.append('Total Recorded: %s' % fmt(rec.total_recorded_hours))
-        lines.append('Difference: %s − %s = %s' % (
-            fmt(hpd), fmt(rec.total_recorded_hours), fmt(rec.difference)))
-
-        limit = cal.late_check_in_limit if cal and cal.late_check_in_limit else 11.0
-        if rec.late_minutes:
-            lines.append('Late: started %s, after the Late Check-in Limit %s = %s' % (
-                fmt(rec.first_check_in), fmt(limit), fmt(rec.late_minutes)))
-        if rec.early_leave_minutes:
-            lines.append('Early Leave: day ran %s → %s, short of the %s day = %s' % (
-                fmt(rec.first_check_in), fmt(rec.last_check_out), fmt(hpd),
-                fmt(rec.early_leave_minutes)))
-
-        return '\n'.join(lines)
 
     @api.model
     def _day_kind(self, employee, target_date):
@@ -369,7 +301,7 @@ class AttendanceReport(models.Model):
         First Check-in and the Last Check-out are taken from.
         """
         return sum(end - start
-                   for start, end, _leave in self._leave_intervals(employee, target_date))
+                   for start, end in self._leave_intervals(employee, target_date))
 
     @api.model
     def _hours_per_day(self, employee):
@@ -560,7 +492,6 @@ class AttendanceReport(models.Model):
                 rec.daily_check = rec.deduction = 0.0
                 rec.attendance_hours = rec.activities_hours = 0.0
                 rec.total_recorded_hours = rec.difference = 0.0
-                rec.difference_details = False
                 rec.deduction_state = False
                 rec.monthly_permission = 0.0
                 rec.late_minutes = rec.early_leave_minutes = 0.0
@@ -603,9 +534,6 @@ class AttendanceReport(models.Model):
             if rec.comment != 'working_day':
                 rec.difference = 0.0
                 rec.early_leave_minutes = 0.0
-
-            rec.difference_details = self._difference_details(
-                rec, cal, hpd, punch_in, punch_out, counted_out)
 
     # ─── Daily record creation ───────────────────────────────────────────────
 
@@ -666,8 +594,7 @@ class AttendanceReport(models.Model):
                          'late_minutes', 'early_leave_minutes',
                          'attendance_hours', 'activities_hours',
                          'total_recorded_hours', 'difference',
-                         'deduction_state', 'monthly_permission',
-                         'difference_details'):
+                         'deduction_state', 'monthly_permission'):
                 self.env.add_to_compute(self._fields[name], rows)
             rows.flush_recordset()
         except Exception:
