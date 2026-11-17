@@ -21,7 +21,7 @@
                 <field name="activities_hours" widget="float_time" optional="show" sum="Total Activities"/>
                 <field name="total_recorded_hours" widget="float_time" optional="hide" sum="Total Recorded"/>
                 <field name="difference" widget="float_time" optional="show"/>
-                <field name="difference_details" optional="hide"/>
+                <field name="difference_details" optional="show"/>
                 <field name="daily_check" widget="float_time" optional="hide"/>
                 <field name="deduction" widget="float_time" sum="Total Deduction"/>
                 <field name="deduction_state" widget="badge" optional="hide"
@@ -68,7 +68,7 @@
                             <field name="deduction_state"/>
                         </group>
                     </group>
-                    <group string="Difference Details" invisible="not difference_details">
+                    <group string="Difference Details">
                         <field name="difference_details" nolabel="1" colspan="2"/>
                     </group>
                     <notebook>

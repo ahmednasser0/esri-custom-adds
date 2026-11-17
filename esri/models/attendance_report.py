@@ -101,7 +101,7 @@ class AttendanceReport(models.Model):
     difference_details = fields.Text(
         string='Difference Details',
         compute='_compute_values', store=True,
-        help="The stretches of the day the Difference is made of, by clock time: the lateness before the day started, any gap left uncovered inside it, and what it still owed when it ended. Empty when nothing is missing",
+        help="The stretches of the day the Difference is made of, by clock time: the lateness before the day started, any gap left uncovered inside it, and what it still owed when it ended. Reads No difference when nothing is missing",
     )
     deduction_state = fields.Selection(
         [
@@ -261,7 +261,7 @@ class AttendanceReport(models.Model):
     def _difference_details(self, rec, cal, punch_in, punch_out, counted_out):
         """
         The clock times the row's Difference is made of, one stretch a line,
-        or False when the day is short of nothing.
+        or 'No difference' when the day is short of nothing.
 
         The missing time is placed where it fell, in this order, until the
         whole Difference is accounted for:
@@ -276,7 +276,7 @@ class AttendanceReport(models.Model):
         """
         remaining = rec.difference or 0.0
         if remaining <= 0.0:
-            return False
+            return 'No difference'
 
         fmt = self._hhmm
         lines = []
