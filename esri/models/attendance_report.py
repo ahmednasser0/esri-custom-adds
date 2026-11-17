@@ -121,7 +121,7 @@ class AttendanceReport(models.Model):
     monthly_permission = fields.Float(
         string='Permission Balance',
         compute='_compute_values', store=True,
-        help="What is left of the configured monthly permission time off on this day, in hours",
+        help="What is left of the employee's Monthly Permission for this day's month, in hours: the month's allocation less the permission taken in that month up to and including this day",
     )
     time_off_balance = fields.Float(
         string='Time Off Balance',
@@ -321,6 +321,56 @@ class AttendanceReport(models.Model):
         return (allocation.number_of_days or 0.0) * self._hours_per_day(employee)
 
     @api.model
+    def _monthly_permission_type(self):
+        """
+        The Monthly Permission leave type: the one set in Esri Configurations,
+        or failing that the leave type named Monthly Permission.
+        """
+        leave_type = self.env['esri.config'].sudo().get_config().monthly_permission_type_id
+        if leave_type:
+            return leave_type
+        return self.env['hr.leave.type'].sudo().search(
+            [('name', 'ilike', 'monthly permission')], limit=1)
+
+    @api.model
+    def _monthly_permission_hours(self, employee, leave_type, target_date):
+        """
+        What is left of the employee's Monthly Permission for target_date's
+        month, as it stands at the end of target_date, in hours.
+
+        The allocation is the one granted for that month: every approved
+        allocation of the type whose period reaches into the month. What is
+        taken is the approved permission used in that month alone, from its
+        first day up to target_date, so a month never pays for the one before
+        it. Never less than nothing.
+        """
+        if not leave_type:
+            return 0.0
+
+        month_start = target_date.replace(day=1)
+        month_end   = (month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+
+        allocations = self.env['hr.leave.allocation'].sudo().search([
+            ('employee_id',       '=', employee.id),
+            ('holiday_status_id', '=', leave_type.id),
+            ('state',             '=', 'validate'),
+            ('date_from',        '<=', month_end),
+            '|', ('date_to', '=', False), ('date_to', '>=', month_start),
+        ])
+        allocated = sum(self._allocation_hours(a, employee) for a in allocations)
+
+        leaves = self.env['hr.leave'].sudo().search([
+            ('employee_id',        '=', employee.id),
+            ('holiday_status_id',  '=', leave_type.id),
+            ('state',              '=', 'validate'),
+            ('request_date_from', '>=', month_start),
+            ('request_date_from', '<=', target_date),
+        ])
+        taken = sum(l.number_of_hours or 0.0 for l in leaves)
+
+        return max(allocated - taken, 0.0)
+
+    @api.model
     def _balance_hours(self, employee, leave_type, target_date):
         """
         What is left of leave_type for employee on target_date, in hours:
@@ -433,8 +483,7 @@ class AttendanceReport(models.Model):
 
     @api.depends('employee_id', 'date')
     def _compute_values(self):
-        cfg             = self.env['esri.config'].sudo().get_config()
-        permission_type = cfg.monthly_permission_type_id
+        permission_type = self._monthly_permission_type()
 
         for rec in self:
             if not rec.employee_id or not rec.date:
@@ -475,7 +524,7 @@ class AttendanceReport(models.Model):
             # stops at zero rather than turning into time in hand.
             rec.difference = max(hpd - rec.total_recorded_hours, 0.0)
 
-            rec.monthly_permission = self._balance_hours(employee, permission_type, day)
+            rec.monthly_permission = self._monthly_permission_hours(employee, permission_type, day)
             rec.late_minutes, rec.early_leave_minutes = self._late_and_early(
                 employee, rec.first_check_in, rec.last_check_out)
             rec.comment = self._day_kind(employee, day)
