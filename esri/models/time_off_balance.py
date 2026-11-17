@@ -46,8 +46,13 @@ class TimeOffBalance(models.Model):
     )
     start_label = fields.Char(
         string='Start Date',
-        compute='_compute_start_label',
-        help="When the line starts, as it reads on screen: the day alone for a deduction, which covers a whole day and has no hour, and the day and the hour for anything else",
+        compute='_compute_date_labels',
+        help="When the line starts, as it reads on screen: the day alone for an allocation or a deduction, which run in whole days and have no hour, and the day and the hour for time off",
+    )
+    end_label = fields.Char(
+        string='End Date',
+        compute='_compute_date_labels',
+        help="When the line ends, as it reads on screen: the day alone for an allocation, and the day and the hour for time off. A deduction has none",
     )
     day_movement = fields.Float(
         string='Days',
@@ -127,22 +132,30 @@ class TimeOffBalance(models.Model):
         for rec in rows:
             rec.number_of_days = balance_of.get(rec.id, 0.0)
 
-    @api.depends('start_date', 'source')
+    # Sources that run in whole days and carry no hour of their own.
+    _DATE_ONLY_SOURCES = ('allocation', 'deduction')
+
+    @api.depends('start_date', 'end_date', 'source')
     @api.depends_context('tz', 'lang')
-    def _compute_start_label(self):
+    def _compute_date_labels(self):
         """
-        The start as it should read: a deduction is charged against a whole
-        day and was never given an hour, so it shows the day alone instead of
-        a midnight it does not mean. Everything else keeps its hour, in the
-        viewer's own timezone the way Odoo shows any date and time.
+        The start and the end as they should read.
+
+        An allocation runs from one day to another and a deduction is charged
+        against a whole day; neither was given an hour, so they show the day
+        alone instead of a midnight they do not mean. Time off keeps its hour,
+        in the viewer's own timezone the way Odoo shows any date and time.
         """
+        def label(rec, value):
+            if not value:
+                return False
+            if rec.source in self._DATE_ONLY_SOURCES:
+                return format_date(rec.env, value.date())
+            return format_datetime(rec.env, value)
+
         for rec in self:
-            if not rec.start_date:
-                rec.start_label = False
-            elif rec.source == 'deduction':
-                rec.start_label = format_date(rec.env, rec.start_date.date())
-            else:
-                rec.start_label = format_datetime(rec.env, rec.start_date)
+            rec.start_label = label(rec, rec.start_date)
+            rec.end_label   = label(rec, rec.end_date)
 
     # ─── Reading one source record ───────────────────────────────────────────
 
