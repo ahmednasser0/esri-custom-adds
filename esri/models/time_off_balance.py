@@ -51,7 +51,7 @@ class TimeOffBalance(models.Model):
     )
     day_movement = fields.Float(
         string='Days',
-        aggregator=False,
+        aggregator='sum',
         help="The days this line moves on its own: an allocation adds them and counts up, while time off and a deduction take them away and count down",
     )
     number_of_days = fields.Float(
