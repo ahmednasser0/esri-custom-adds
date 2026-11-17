@@ -98,6 +98,11 @@ class AttendanceReport(models.Model):
         aggregator=False,
         help="The day's work hours less the Total Recorded Hours: what the day is short. A day recorded past its hours reads zero",
     )
+    difference_details = fields.Text(
+        string='Difference Details',
+        compute='_compute_values', store=True,
+        help="The stretches of the day the Difference is made of, by clock time: the lateness before the day started, any gap left uncovered inside it, and what it still owed when it ended. Empty when nothing is missing",
+    )
     deduction_state = fields.Selection(
         [
             ('draft',    'Draft'),
@@ -245,6 +250,74 @@ class AttendanceReport(models.Model):
             last_out = max(last_out, leave_to)
 
         return first_in, last_out
+
+    @staticmethod
+    def _hhmm(hours):
+        """A number of hours as H:MM, the way the float_time widget shows it."""
+        minutes = int(round((hours or 0.0) * 60))
+        return '%d:%02d' % (minutes // 60, minutes % 60)
+
+    @api.model
+    def _difference_details(self, rec, cal, punch_in, punch_out, counted_out):
+        """
+        The clock times the row's Difference is made of, one stretch a line,
+        or False when the day is short of nothing.
+
+        The missing time is placed where it fell, in this order, until the
+        whole Difference is accounted for:
+
+        - Late: from the Late Check-in Limit to when the day started, when it
+          started after it;
+        - Gap: each stretch inside the day that neither the attendance nor an
+          approved time off covered;
+        - Early Leave: whatever is still owed, from when the day ended onwards.
+
+        The stretches always add up to the Difference itself.
+        """
+        remaining = rec.difference or 0.0
+        if remaining <= 0.0:
+            return False
+
+        fmt = self._hhmm
+        lines = []
+
+        covered = []
+        if punch_in and punch_out:
+            covered.append((punch_in, max(counted_out, punch_in)))
+        covered += self._leave_intervals(rec.employee_id, rec.date)
+        covered = sorted(i for i in covered if i[1] > i[0])
+
+        if not covered:
+            return 'No attendance or time off recorded = %s' % fmt(remaining)
+
+        # Join the stretches that touch or overlap, so only real gaps remain.
+        merged = [list(covered[0])]
+        for start, end in covered[1:]:
+            if start <= merged[-1][1]:
+                merged[-1][1] = max(merged[-1][1], end)
+            else:
+                merged.append([start, end])
+
+        def take(label, start, amount):
+            nonlocal remaining
+            amount = min(amount, remaining)
+            if amount <= 0.0:
+                return
+            lines.append('%s: %s → %s = %s' % (
+                label, fmt(start), fmt(start + amount), fmt(amount)))
+            remaining -= amount
+
+        day_start = merged[0][0]
+        limit = cal.late_check_in_limit if cal and cal.late_check_in_limit else 11.0
+        if day_start > limit:
+            take('Late', limit, day_start - limit)
+
+        for (_s, end), (start, _e) in zip(merged, merged[1:]):
+            take('Gap', end, start - end)
+
+        take('Early Leave', merged[-1][1], remaining)
+
+        return '\n'.join(lines) or False
 
     @api.model
     def _day_kind(self, employee, target_date):
@@ -492,6 +565,7 @@ class AttendanceReport(models.Model):
                 rec.daily_check = rec.deduction = 0.0
                 rec.attendance_hours = rec.activities_hours = 0.0
                 rec.total_recorded_hours = rec.difference = 0.0
+                rec.difference_details = False
                 rec.deduction_state = False
                 rec.monthly_permission = 0.0
                 rec.late_minutes = rec.early_leave_minutes = 0.0
@@ -534,6 +608,9 @@ class AttendanceReport(models.Model):
             if rec.comment != 'working_day':
                 rec.difference = 0.0
                 rec.early_leave_minutes = 0.0
+
+            rec.difference_details = self._difference_details(
+                rec, cal, punch_in, punch_out, counted_out)
 
     # ─── Daily record creation ───────────────────────────────────────────────
 
@@ -594,7 +671,8 @@ class AttendanceReport(models.Model):
                          'late_minutes', 'early_leave_minutes',
                          'attendance_hours', 'activities_hours',
                          'total_recorded_hours', 'difference',
-                         'deduction_state', 'monthly_permission'):
+                         'deduction_state', 'monthly_permission',
+                         'difference_details'):
                 self.env.add_to_compute(self._fields[name], rows)
             rows.flush_recordset()
         except Exception:
