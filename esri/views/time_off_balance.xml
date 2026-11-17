@@ -13,6 +13,7 @@
                 <field name="start_label"/>
                 <field name="start_date" optional="hide"/>
                 <field name="end_date"/>
+                <field name="day_movement" optional="hide"/>
                 <field name="number_of_days"/>
                 <field name="status"/>
                 <field name="description" optional="show"/>
@@ -36,6 +37,7 @@
                         <group string="Line">
                             <field name="start_label"/>
                             <field name="end_date" invisible="source == 'deduction'"/>
+                            <field name="day_movement"/>
                             <field name="number_of_days"/>
                             <field name="status"/>
                             <field name="source"/>

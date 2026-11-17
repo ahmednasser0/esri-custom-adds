@@ -128,7 +128,7 @@ class AttendanceReport(models.Model):
         compute='_compute_time_off_balance',
         aggregator=False,
         digits=(16, 2),
-        help="What is left of the employee's Regular Annual leave at the end of this day, in days: the Number of Days of every Regular Annual line in the Time Off Balance report up to and including it, allocations in and time off and deductions out",
+        help="What is left of the employee's Regular Annual leave at the end of this day, in days: the Days of every Regular Annual line in the Time Off Balance report up to and including it, allocations in and time off and deductions out",
     )
     comment = fields.Selection(
         [
@@ -452,7 +452,7 @@ class AttendanceReport(models.Model):
                 ('leave_type_id', '=',  leave_type.id),
                 ('start_date',    '<',  fields.Datetime.to_datetime(last_day + timedelta(days=1))),
             ],
-            ['employee_id', 'start_date', 'number_of_days'],
+            ['employee_id', 'start_date', 'day_movement'],
         )
 
         by_employee = {}
@@ -460,7 +460,7 @@ class AttendanceReport(models.Model):
             if not line['start_date']:
                 continue
             by_employee.setdefault(line['employee_id'][0], []).append(
-                (line['start_date'].date(), line['number_of_days'] or 0.0))
+                (line['start_date'].date(), line['day_movement'] or 0.0))
 
         for rec in rows:
             rec.time_off_balance = sum(

@@ -49,10 +49,16 @@ class TimeOffBalance(models.Model):
         compute='_compute_start_label',
         help="When the line starts, as it reads on screen: the day alone for a deduction, which covers a whole day and has no hour, and the day and the hour for anything else",
     )
+    day_movement = fields.Float(
+        string='Days',
+        aggregator=False,
+        help="The days this line moves on its own: an allocation adds them and counts up, while time off and a deduction take them away and count down",
+    )
     number_of_days = fields.Float(
         string='Number of Days',
+        compute='_compute_number_of_days',
         aggregator=False,
-        help="The days the line moves: an allocation adds them and counts up, while time off and a deduction take them away and count down",
+        help="The employee's balance of this time off type once this line is counted: the Days of every line of the same employee and type up to and including this one, in the order they start",
     )
     status = fields.Char(
         string='Status',
@@ -83,6 +89,43 @@ class TimeOffBalance(models.Model):
         'UNIQUE(source_model, source_res_id)',
         'A time off balance line already exists for this source record.',
     )
+
+    @api.depends('employee_id', 'leave_type_id', 'start_date', 'day_movement')
+    def _compute_number_of_days(self):
+        """
+        The running balance of each line's employee and time off type.
+
+        Every line of the same employee and type is taken in the order it
+        starts - lines starting together in the order they were written - and
+        their Days added up to and including this one.
+
+        Not stored on purpose: a leave added, changed or removed before a line
+        moves that line's balance and every one after it, and a stored figure
+        would only be put right on the line that changed. One search covers
+        every line on the screen, rather than a query for each.
+        """
+        rows = self.filtered(lambda r: r.employee_id)
+        (self - rows).number_of_days = 0.0
+        if not rows:
+            return
+
+        lines = self.sudo().search_read(
+            [('employee_id', 'in', rows.employee_id.ids)],
+            ['employee_id', 'leave_type_id', 'start_date', 'day_movement'],
+        )
+        floor = fields.Datetime.to_datetime('1900-01-01')
+        lines.sort(key=lambda l: (l['start_date'] or floor, l['id']))
+
+        running = {}
+        balance_of = {}
+        for line in lines:
+            key = (line['employee_id'][0],
+                   line['leave_type_id'][0] if line['leave_type_id'] else False)
+            running[key] = running.get(key, 0.0) + (line['day_movement'] or 0.0)
+            balance_of[line['id']] = running[key]
+
+        for rec in rows:
+            rec.number_of_days = balance_of.get(rec.id, 0.0)
 
     @api.depends('start_date', 'source')
     @api.depends_context('tz', 'lang')
@@ -196,7 +239,7 @@ class TimeOffBalance(models.Model):
                 'leave_type_id':  self._annual_leave_type().id or False,
                 'start_date':     record.date or False,
                 'end_date':       False,
-                'number_of_days': days,
+                'day_movement': days,
                 'description':    record.description or False,
             })
         else:
@@ -211,7 +254,7 @@ class TimeOffBalance(models.Model):
                 'leave_type_id':  record.holiday_status_id.id or False,
                 'start_date':     self._first_value(record, ('date_from', 'start_date')),
                 'end_date':       self._first_value(record, ('date_to', 'end_date')),
-                'number_of_days': days,
+                'day_movement': days,
                 'description':    record.name or False,
             })
 
@@ -227,8 +270,8 @@ class TimeOffBalance(models.Model):
         # days in and counts up, time off and a deduction take them out and
         # count down. The source always reports its own figure as a positive
         # number, so the sign is put on here rather than relied on.
-        days = abs(values.get('number_of_days') or 0.0)
-        values['number_of_days'] = days if source == 'allocation' else -days
+        days = abs(values.get('day_movement') or 0.0)
+        values['day_movement'] = days if source == 'allocation' else -days
 
         return values
 
