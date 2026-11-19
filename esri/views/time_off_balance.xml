@@ -19,6 +19,9 @@
                 <field name="status"/>
                 <field name="description" optional="show"/>
                 <field name="source"/>
+                <button name="action_open_allocation" type="object"
+                        icon="fa-external-link" title="Open Allocation"
+                        invisible="source != 'allocation'"/>
             </list>
         </field>
     </record>
@@ -42,6 +45,7 @@
                             <field name="number_of_days"/>
                             <field name="status"/>
                             <field name="source"/>
+                            <field name="allocation_id" invisible="source != 'allocation'"/>
                         </group>
                     </group>
                     <group string="Description">

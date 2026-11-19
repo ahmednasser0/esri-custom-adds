@@ -89,6 +89,12 @@ class TimeOffBalance(models.Model):
     # again and rewritten whenever that record changes.
     source_model = fields.Char(string='Source Model', required=True, index=True)
     source_res_id = fields.Integer(string='Source Record', required=True, index=True)
+    allocation_id = fields.Many2one(
+        'hr.leave.allocation',
+        string='Allocation',
+        compute='_compute_allocation_id',
+        help="The allocation this line was taken from; open it to see the allocation itself",
+    )
 
     _unique_source_record = models.Constraint(
         'UNIQUE(source_model, source_res_id)',
@@ -131,6 +137,23 @@ class TimeOffBalance(models.Model):
 
         for rec in rows:
             rec.number_of_days = balance_of.get(rec.id, 0.0)
+
+    @api.depends('source_model', 'source_res_id')
+    def _compute_allocation_id(self):
+        """The allocation an allocation line stands for, if it is still there."""
+        Allocation = self.env['hr.leave.allocation']
+        for rec in self:
+            if rec.source_model == 'hr.leave.allocation' and rec.source_res_id:
+                rec.allocation_id = Allocation.browse(rec.source_res_id).exists()
+            else:
+                rec.allocation_id = False
+
+    def action_open_allocation(self):
+        """Open the allocation this line was taken from, on its own form."""
+        self.ensure_one()
+        if not self.allocation_id:
+            return False
+        return self.allocation_id.get_formview_action()
 
     # Sources that run in whole days and carry no hour of their own.
     _DATE_ONLY_SOURCES = ('allocation', 'deduction')
